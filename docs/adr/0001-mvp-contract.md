@@ -1,0 +1,15 @@
+# MVP-Aの実装契約
+
+2026-10-04。詳細設計の仮値を初期の `reading-v1` として採用する。本文可視率50%が累計2秒、idle60秒、2秒を超えるtick gapは加算しない。Unicode code point、NFC、空白除外、200文字chunk、日600/英1000文字毎分を上限係数にする。これらは精度の実測保証ではない。
+
+APIは `/api/v1`、具体形は `packages/contracts/api.md`。Pydanticがイベントの原本で、JSON Schemaを同じCIで生成差分確認する。UTC日時はJSON文字列、schema versionは整数でbooleanを受け入れない。time_onlyはfingerprint/文字数null、chunk/covered空、reason_code必須。openedとclosedは空区間を許し、observedは正の区間を必要とする。
+
+PG User行ロックで同一利用者のイベント受理・削除・設定変更を直列化する。受理順のIDを保持し、未計上区間をそのsessionへ割り当てる。読了にも割当後時間を使い、別sessionの時間を借りない。raw eventとは別に正規化interval表を保存する。UIと再計算は同じ純粋replayを使用する。閉じた少人数版ではread時に再計算し、測定した限界を記録する。汎用projection基盤は追加しない。
+
+自動の公開メトリクスへ寄与するのは、割当後時間が10秒以上で閲覧条件を満たしたsession。10秒未満の途中観測はraw evidenceとして保存するが、履歴・記事別時間・統計へはまだ投影しない。後続観測で条件に達すると、そのsessionの計上時間全体を投影する。この境界で、履歴に出ない短時間sessionを総時間だけに混ぜず、記事別合計と総時間を一致させる。文字数はsession内推定の最大、記事内session最大、その時刻順増分とする。manual stateは自動メトリクスを増やさない。
+
+端末には読み取りと観測書き込みだけのscopeを付ける。管理操作はWeb session+CSRFで検証する。OAuthはAuthlibでstate/nonce/PKCEを扱い、identity追加の意図をproviderとOAuth stateへ結びつける。未完の追加操作を、その後の通常ログインへ流用しない。同じメールによる結合はしない。
+
+Androidの永続化はRoom案と同じ耐久契約をSQLiteOpenHelperのtransactionで実装する。tokenは別のAndroid Keystore AES-GCM保存。共通trackerはKotlin版の別判定を作らず同じJS bundleを使用する。デバッグのローカルAPIは限定したHTTP hostだけ許可し、配布設定はHTTPSを必須とする。
+
+公開プロフィールは独立responseで総時間・称号の個別許可だけ返す。初期は非公開・クラウドOFF。MVP-Aは閉じた検証として準備する。実OAuth・HTTPS配備先・署名はユーザーが未準備と回答したため、後日のSTへ具体手順を渡す。Android実機は許可されたAndroid15エミュレータで代替確認し、物理実機の確認済みとは書かない。

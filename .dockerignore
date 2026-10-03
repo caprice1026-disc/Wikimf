@@ -1,0 +1,10 @@
+.git
+.venv
+.tooling
+.tmp
+**/node_modules
+**/.gradle
+**/.tooling
+**/build
+.env
+**/*.log

@@ -1,0 +1,312 @@
+{
+  "$defs": {
+    "Document": {
+      "additionalProperties": false,
+      "properties": {
+        "fingerprint": {
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fingerprint"
+        },
+        "extractor_version": {
+          "const": "prose-v1",
+          "title": "Extractor Version",
+          "type": "string"
+        },
+        "observed_revision_id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 2147483647,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed Revision Id"
+        },
+        "text_chars": {
+          "anyOf": [
+            {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Text Chars"
+        },
+        "chunk_chars": {
+          "items": {
+            "exclusiveMinimum": 0,
+            "maximum": 200,
+            "type": "integer"
+          },
+          "maxItems": 5000,
+          "title": "Chunk Chars",
+          "type": "array"
+        }
+      },
+      "required": [
+        "extractor_version",
+        "text_chars",
+        "chunk_chars"
+      ],
+      "title": "Document",
+      "type": "object"
+    },
+    "Interval": {
+      "additionalProperties": false,
+      "properties": {
+        "start_at": {
+          "format": "date-time",
+          "title": "Start At",
+          "type": "string"
+        },
+        "end_at": {
+          "format": "date-time",
+          "title": "End At",
+          "type": "string"
+        },
+        "active_spans_ms": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "minimum": 0,
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "maxItems": 1000,
+          "title": "Active Spans Ms",
+          "type": "array"
+        }
+      },
+      "required": [
+        "start_at",
+        "end_at",
+        "active_spans_ms"
+      ],
+      "title": "Interval",
+      "type": "object"
+    },
+    "Progress": {
+      "additionalProperties": false,
+      "properties": {
+        "active_ms_total": {
+          "minimum": 0,
+          "title": "Active Ms Total",
+          "type": "integer"
+        },
+        "covered_chunk_ids": {
+          "items": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 5000,
+          "title": "Covered Chunk Ids",
+          "type": "array"
+        },
+        "measurement_status": {
+          "enum": [
+            "ok",
+            "time_only"
+          ],
+          "title": "Measurement Status",
+          "type": "string"
+        },
+        "max_scroll_ratio": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Max Scroll Ratio",
+          "type": "number"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 60,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        }
+      },
+      "required": [
+        "active_ms_total",
+        "covered_chunk_ids",
+        "measurement_status"
+      ],
+      "title": "Progress",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "event_id": {
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "session.opened",
+        "reading.observed",
+        "session.closed"
+      ],
+      "title": "Type",
+      "type": "string"
+    },
+    "device_id": {
+      "format": "uuid",
+      "title": "Device Id",
+      "type": "string"
+    },
+    "session_id": {
+      "format": "uuid",
+      "title": "Session Id",
+      "type": "string"
+    },
+    "session_started_at": {
+      "format": "date-time",
+      "title": "Session Started At",
+      "type": "string"
+    },
+    "seq": {
+      "maximum": 2147483647,
+      "minimum": 0,
+      "title": "Seq",
+      "type": "integer"
+    },
+    "source": {
+      "enum": [
+        "android_reader",
+        "chrome_extension"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "article_id": {
+      "format": "uuid",
+      "title": "Article Id",
+      "type": "string"
+    },
+    "wiki": {
+      "enum": [
+        "jawiki",
+        "enwiki"
+      ],
+      "title": "Wiki",
+      "type": "string"
+    },
+    "page_id": {
+      "exclusiveMinimum": 0,
+      "maximum": 2147483647,
+      "title": "Page Id",
+      "type": "integer"
+    },
+    "recording_epoch": {
+      "exclusiveMinimum": 0,
+      "maximum": 2147483647,
+      "title": "Recording Epoch",
+      "type": "integer"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "interval": {
+      "$ref": "#/$defs/Interval"
+    },
+    "document": {
+      "$ref": "#/$defs/Document"
+    },
+    "progress": {
+      "$ref": "#/$defs/Progress"
+    },
+    "client_version": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Client Version",
+      "type": "string"
+    },
+    "measurement_policy_version": {
+      "const": "reading-v1",
+      "title": "Measurement Policy Version",
+      "type": "string"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "enum": [
+            "navigate",
+            "reload",
+            "pause",
+            "logout",
+            "document_changed",
+            "clock_changed",
+            "process_lost",
+            "extractor_changed"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    }
+  },
+  "required": [
+    "event_id",
+    "type",
+    "device_id",
+    "session_id",
+    "session_started_at",
+    "seq",
+    "source",
+    "article_id",
+    "wiki",
+    "page_id",
+    "recording_epoch",
+    "occurred_at",
+    "interval",
+    "document",
+    "progress",
+    "client_version",
+    "measurement_policy_version"
+  ],
+  "title": "ReadingEventInput",
+  "type": "object"
+}

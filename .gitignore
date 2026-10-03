@@ -1,4 +1,17 @@
 # Byte-compiled / optimized / DLL files
+.tooling/
+.tmp/
+node_modules/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.browser-tests/
+.playwright/
+local.properties
+*.jks
+*.keystore
+.env.local
 __pycache__/
 *.py[codz]
 *$py.class

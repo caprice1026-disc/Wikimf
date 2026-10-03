@@ -1056,7 +1056,7 @@ effective_state
 | 状態別記事数 | Articleごとのeffective_stateで分けた3状態の数 |
 | 読了記事数 | effective_stateがcompletedの記事数。自動/手動の内訳も取得可能 |
 | 読書活動数 | 閲覧条件を満たしたReadingSessionの数 |
-| アクティブ閲覧時間 | 計上可能な時間区間の和集合 |
+| アクティブ閲覧時間 | 有効な自動閲覧条件を満たしたsessionに割り当てた時間区間の和集合。10秒未満の途中観測は条件到達まで投影しない（実装契約ADR 0001） |
 | 推定読書文字数 | 記事ごとのsession推定文字数の最大値を合計する初期定義 |
 | 最近の読書 | qualified sessionの時系列。観測heartbeatを並べない |
 

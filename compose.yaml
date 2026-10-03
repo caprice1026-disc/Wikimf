@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:17.6
+    environment:
+      POSTGRES_DB: wikimf
+      POSTGRES_USER: wikimf
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wikimf}
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wikimf -d wikimf"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://wikimf:${POSTGRES_PASSWORD:-wikimf}@db:5432/wikimf
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "python -m alembic -c apps/backend/alembic.ini upgrade head && python -m uvicorn wikimf.main:app --app-dir apps/backend --host 0.0.0.0 --port 8000 --no-access-log"]
+volumes:
+  postgres_data:
