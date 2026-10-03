@@ -101,6 +101,10 @@ def create_app(database_url=None, mediawiki=None):
             raise APIError("database_unavailable",503,True) from None
         return {"status":"ok","schema_version":1,"measurement_policy_version":"reading-v1"}
 
+    @app.get(PREFIX+"/config")
+    def public_config():
+        return {"dashboard_url":dashboard}
+
     def user_json(user, device=None, web=None):
         return {"user_id":user.id,"display_name":user.display_name,"timezone":user.timezone,"recording_epoch":user.recording_epoch,
                 "collection_enabled":user.collection_enabled,"csrf_token":web.csrf_token if web else None,"device_id":device.id if device else None}

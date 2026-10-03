@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from uuid import uuid4
@@ -10,7 +11,7 @@ from sqlalchemy import select
 from conftest import observation,send,web_headers
 from wikimf.articles import APIError,parse_article_url
 from wikimf.auth import digest,identify,issue_web_session,token
-from wikimf.db import Article,Device,Identity,ReadingEvent,User,now
+from wikimf.db import Article,Device,Identity,ReadingEvent,ReadingInterval,ReadingSession,User,now
 from wikimf.projection import infer,replay,stats,subtract,union
 
 
@@ -57,6 +58,17 @@ def test_health_resolver_public_metadata(env):
     assert client.get("/api/v1/wikis/enwiki/pages/202").json()["article_id"] == a["article_id"]
     assert client.get("/api/v1/wikis/enwiki/pages/2147483648").status_code == 400
     assert client.post("/api/v1/articles/resolve",json={"url":"https://en.wikipedia.org/wiki/Missing"}).status_code == 404
+
+
+def test_public_client_config_requires_no_account_and_has_no_secrets(env):
+    app,client,ids = env
+    client.cookies.clear()
+    assert client.get("/api/v1/me").status_code == 401
+    response=client.get("/api/v1/config")
+    assert response.status_code == 200
+    assert set(response.json()) == {"dashboard_url"}
+    assert response.json()["dashboard_url"] == os.getenv("DASHBOARD_ORIGIN","http://localhost:5173").rstrip("/")
+    assert ids["token"] not in response.text
 
 
 def test_duplicate_conflict_and_user_separation(env):
@@ -258,6 +270,97 @@ def test_short_sessions_have_no_public_metrics(env):
     records=client.get("/api/v1/me/articles").json()["items"]
     assert summary["activity"]["active_ms"]==sum(r["active_ms"] for r in records)==10000
     assert summary["activity"]["activity_count"]==1
+
+
+def test_separate_session_coverage_does_not_complete_article(env):
+    app,client,ids = env
+    start = now()-timedelta(minutes=5)
+    first = observation(ids,start=start,seconds=60,chunks=(0,1,2))
+    second = observation(ids,start=start+timedelta(minutes=2),seconds=60,chunks=(3,4,5))
+    for event in (first,second):
+        event["document"].update(text_chars=600,chunk_chars=[100]*6)
+    assert first["session_id"] != second["session_id"]
+    assert [r["status"] for r in send(client,ids,first,second).json()["results"]] == ["accepted","accepted"]
+    record = client.get("/api/v1/me/articles/"+ids["article_id"]).json()
+    # Each session has enough time for completion, but only half the document.
+    assert len(record["activities"]) == 2
+    assert all(a["state"] == "partial" and a["coverage"] == 0.5 and a["active_ms"] == 60000 for a in record["activities"])
+    assert record["inferred_state"] == record["effective_state"] == "partial"
+    assert record["coverage"] == 0.5 and record["active_ms"] == 120000
+    assert record["estimated_read_chars"] == 300
+    summary = client.get("/api/v1/me/stats").json()
+    assert summary["library"]["completed_inferred_count"] == 0
+    assert summary["activity"]["activity_count"] == 2
+    assert summary["activity"]["estimated_unique_read_chars"] == 300
+
+
+@pytest.mark.parametrize("field",["article_id","wiki","page_id"])
+def test_article_identifier_mismatch_rejects_observation(env,field):
+    app,client,ids = env
+    event = observation(ids,seconds=30)
+    if field == "article_id":
+        with app.state.sessions() as db:
+            other = Article(wiki="jawiki",page_id=102,title="Other fixture",canonical_url="https://ja.wikipedia.org/wiki/Other",namespace=0,trackable=True)
+            db.add(other)
+            db.commit()
+            event[field] = other.id
+    else:
+        event[field] = "enwiki" if field == "wiki" else 102
+    response = send(client,ids,event)
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert (result["status"],result["code"],result["retryable"]) == ("rejected","article_mismatch",False)
+    assert client.get("/api/v1/me/articles").json()["items"] == []
+    with app.state.sessions() as db:
+        assert list(db.scalars(select(ReadingEvent))) == []
+        assert list(db.scalars(select(ReadingSession))) == []
+
+
+def test_same_session_uuid_is_isolated_by_authenticated_user(env):
+    app,client,ids = env
+    start = now()-timedelta(minutes=5)
+    original = observation(ids,start=start,seconds=30)
+    assert send(client,ids,original).json()["results"][0]["status"] == "accepted"
+    path = "/api/v1/me/articles/"+ids["article_id"]
+    before_record = client.get(path).json()
+    before_stats = client.get("/api/v1/me/stats").json()
+    before_stats.pop("as_of")
+    with app.state.sessions() as db:
+        before_evidence = copy.deepcopy(db.scalar(select(ReadingEvent).where(ReadingEvent.user_id==ids["user_id"])).payload)
+        other = identify(db,"github","isolated-session-reader","Other reader")
+        other.collection_enabled,other.consent_version = True,"privacy-v1"
+        other_secret = token()
+        device = Device(user_id=other.id,source="chrome_extension",display_name="Other PC",token_hash=digest(other_secret),expires_at=now()+timedelta(days=90))
+        db.add(device)
+        db.commit()
+        other_ids = {**ids,"user_id":other.id,"device_id":device.id,"token":other_secret}
+    # Reusing both IDs must write only inside the sender's user namespace.
+    incoming = copy.deepcopy(original)
+    incoming["device_id"] = other_ids["device_id"]
+    incoming["interval"]["end_at"] = incoming["occurred_at"] = (start+timedelta(seconds=60)).isoformat()
+    incoming["interval"]["active_spans_ms"] = [[0,60000]]
+    incoming["document"].update(text_chars=500,chunk_chars=[100]*5)
+    incoming["progress"].update(active_ms_total=60000,covered_chunk_ids=[0,1,2,3,4])
+    assert send(client,other_ids,incoming).json()["results"][0]["status"] == "accepted"
+    assert client.get(path).json() == before_record
+    after_stats = client.get("/api/v1/me/stats").json()
+    after_stats.pop("as_of")
+    assert after_stats == before_stats
+    headers = {"Authorization":"Bearer "+other_secret}
+    other_record = client.get(path,headers=headers).json()
+    assert other_record["effective_state"] == "completed" and other_record["active_ms"] == 60000
+    assert other_record["activities"][0]["session_id"] == original["session_id"]
+    other_stats = client.get("/api/v1/me/stats",headers=headers).json()
+    assert other_stats["activity"]["active_ms"] == 60000 and other_stats["activity"]["activity_count"] == 1
+    assert other_stats["library"]["completed_inferred_count"] == 1
+    with app.state.sessions() as db:
+        sessions = list(db.scalars(select(ReadingSession).where(ReadingSession.session_id==original["session_id"])))
+        assert {(s.user_id,s.device_id) for s in sessions} == {(ids["user_id"],ids["device_id"]),(other_ids["user_id"],other_ids["device_id"])}
+        own_events = list(db.scalars(select(ReadingEvent).where(ReadingEvent.user_id==ids["user_id"])))
+        assert len(own_events) == 1 and own_events[0].payload == before_evidence
+        assert len(list(db.scalars(select(ReadingEvent).where(ReadingEvent.user_id==other_ids["user_id"])))) == 1
+        assert len(list(db.scalars(select(ReadingInterval).where(ReadingInterval.user_id==ids["user_id"])))) == 1
+        assert len(list(db.scalars(select(ReadingInterval).where(ReadingInterval.user_id==other_ids["user_id"])))) == 1
 
 
 def test_postgres_parallel_duplicate_and_delete(env):

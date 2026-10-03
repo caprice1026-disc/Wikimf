@@ -15,7 +15,7 @@ from sqlalchemy import create_engine,select,text
 from conftest import FixtureWiki,observation,send,web_headers
 from scripts.backend_ops import apply_safety,safety_manifest
 from wikimf.auth import digest,identify,issue_web_session,token
-from wikimf.db import Article,Device,Identity,ManualState,ReadingEvent,User,WebSession,now
+from wikimf.db import Article,ArticleAlias,Device,Identity,ManualState,ReadingEvent,User,WebSession,now
 from wikimf.main import create_app
 from wikimf.projection import replay
 from datetime import timedelta
@@ -49,7 +49,7 @@ def main():
         os.environ["DATABASE_URL"]=prefix+"/"+source
         command.upgrade(cfg,"head")
         command.downgrade(cfg,"base")  # Only fresh empty DB; never retained-data rollback.
-        command.upgrade(cfg,"head")
+        command.upgrade(cfg,"0002_intervals")
         app=create_app(prefix+"/"+source,FixtureWiki());apps.append(app)
         credentials=[]
         with app.state.sessions() as db:
@@ -71,6 +71,14 @@ def main():
                 client.cookies.set("wikimf_session",ids["web_secret"])
                 assert send(client,ids,observation(ids,seconds=30)).json()["results"][0]["status"]=="accepted"
                 assert client.put("/api/v1/me/articles/"+ids["article_id"]+"/state",headers=web_headers(ids),json={"state":"completed"}).status_code==200
+            # Upgrade retained evidence; the new cache table must not alter history.
+            command.upgrade(cfg,"head")
+            with app.state.sessions() as db:
+                assert len(list(db.scalars(select(ReadingEvent))))==3
+                assert len(list(db.scalars(select(ManualState))))==3
+                assert len(list(db.scalars(select(Identity))))==4
+                aliases=list(db.scalars(select(ArticleAlias)))
+                assert len(aliases)==1 and aliases[0].article_id==credentials[0]["article_id"]
             pg("pg_dump","-Fc","-f",str(archive),source)
             # Delete article, account and all history after the old backup was created.
             for index,ids in enumerate(credentials):
@@ -106,7 +114,7 @@ def main():
         with TestClient(restored) as client:
             for ids in credentials:
                 assert send(client,ids,observation(ids)).status_code==401
-        report={"result":"pass","database":"PostgreSQL17.6","checks":["empty-migration-upgrade-downgrade-upgrade","actual-pg-dump-restore","article-deletion-not-resurrected","account-deletion-not-resurrected","epoch-all-history-not-resurrected","all-old-device-tokens-refused","all-web-sessions-revoked","manual-states-not-resurrected","collection-and-publication-disabled","unlinked-identity-not-restored","missing-post-backup-article-safe"]}
+        report={"result":"pass","database":"PostgreSQL17.6","checks":["empty-migration-upgrade-downgrade-upgrade","retained-data-migration-0002-to-0003","actual-pg-dump-restore","article-deletion-not-resurrected","account-deletion-not-resurrected","epoch-all-history-not-resurrected","all-old-device-tokens-refused","all-web-sessions-revoked","manual-states-not-resurrected","collection-and-publication-disabled","unlinked-identity-not-restored","missing-post-backup-article-safe"]}
         (evidence/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
         print(json.dumps(report))
     finally:

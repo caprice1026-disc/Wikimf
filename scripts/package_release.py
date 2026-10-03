@@ -35,7 +35,7 @@ def main():
               "production_release":False,"signing":"local Android debug key; not a release key",
               "artifacts":[{"file":p.name,"bytes":p.stat().st_size,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()} for p in artifacts]}
     (output/"manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
-    (output/"README.txt").write_text("wikimf 0.1.0 閉じたローカル検証用\nAndroid: adb install -r wikimf-0.1.0-debug.apk\nChrome: extension.zip を展開して chrome://extensions の開発者モードで読み込む。\nDashboard: dashboard.zip を展開し、SPA fallback と /api/v1 proxy を設定する。\nAPI 接続先は localhost:8000、Dashboard は localhost:5173。公開配備時は再buildする。\n実OAuth・HTTPS・実機・release署名はSTで確認する。詳しくは docs/releases/ を参照。\n",encoding="utf-8")
+    (output/"README.txt").write_text("wikimf 0.1.0 閉じたローカル検証用\nAndroid: adb install -r wikimf-0.1.0-debug.apk\nAndroidのAccountでAPIを設定する。エミュレータでは http://10.0.2.2:8000/api/v1、adb reverse使用時は http://localhost:8000/api/v1。初期の example URL は接続先ではない。\nChrome: extension.zip を展開して chrome://extensions の開発者モードで読み込む。API は http://localhost:8000/api/v1。\nDashboard: dashboard.zip を展開し、SPA fallback と /api/v1 proxy を設定する。\nローカルDashboardは localhost:5173。Backendの DASHBOARD_ORIGIN も合わせる。公開配備時は接続先を設定して再buildする。\n実OAuth・HTTPS・実機・release署名はSTで確認する。詳しくは docs/releases/ を参照。\n",encoding="utf-8")
     print(json.dumps({"output":str(output),"source_commit":commit,"artifacts":manifest["artifacts"]}))
 
 

@@ -2,6 +2,8 @@
 
 All paths start `/api/v1`. JSON errors: `{error:{code,message,retryable,request_id}}`. Personal responses use `Cache-Control: no-store`. Dashboard uses cookies with credentials included; mutating cookie requests need `X-CSRF-Token` returned by GET `/me`. Device auth uses `Authorization: Bearer …`; devices cannot perform management mutations.
 
+GET `/config` (public): `{dashboard_url}` is the configured Dashboard origin, without user data or credentials. Native uses `/app`, `/app/library`, `/app/articles/{id}`, `/app/settings/privacy` on this origin for browser management. Device approval uses `/link-device/{id}`. Only debug emulator clients may map server loopback hosts to `10.0.2.2`; production clients require HTTPS.
+
 GET `/me`: `{user_id,display_name,timezone,recording_epoch,collection_enabled,csrf_token,device_id}`; csrf_token null for device, device_id null for web.
 
 POST `/device-links`: `{source:"android_reader"|"chrome_extension",display_name}` → `{link_id,device_secret,user_code,verification_url,expires_at,poll_interval_seconds:5}`. GET `/device-links/{id}` (web session) → `{link_id,display_name,source,user_code,scopes,expires_at,approved}`. POST `/device-links/{id}/approve` (web+csrf): `{user_code}` → `{approved:true}`. POST `/device-links/{id}/exchange`: `{device_secret}` → `{token,user_id,device_id,recording_epoch,display_name}`. Pending: HTTP409 `authorization_pending`; expired/already exchanged: terminal errors. Verification URL is Dashboard `/link-device/{id}`. Do not put device_secret in URL. Exchange consumes grant once.

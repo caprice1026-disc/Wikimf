@@ -6,7 +6,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from .db import Article, now, utc
+from .db import Article, ArticleAlias, now, utc
 
 HOSTS = {"ja.wikipedia.org": "jawiki", "ja.m.wikipedia.org": "jawiki", "en.wikipedia.org": "enwiki", "en.m.wikipedia.org": "enwiki"}
 LANGUAGES = {"jawiki": "ja", "enwiki": "en"}
@@ -87,8 +87,16 @@ class MediaWikiClient:
 
 def resolve(db, client, data):
     wiki, identifier = parse_article_url(data.url) if data.url else (data.wiki, {"pageids": str(data.page_id)})
-    cached = db.scalar(select(Article).where(Article.wiki == wiki, Article.page_id == int(identifier["pageids"]))) if "pageids" in identifier else db.scalar(select(Article).where(Article.wiki == wiki, Article.title == identifier["titles"]))
-    if cached and utc(cached.resolved_at) > now() - timedelta(hours=1):
+    title = identifier.get("titles")
+    alias = db.scalar(select(ArticleAlias).where(ArticleAlias.wiki == wiki, ArticleAlias.title == title)) if title else None
+    if title:
+        cached = db.get(Article, alias.article_id) if alias else None
+    else:
+        cached = db.scalar(select(Article).where(Article.wiki == wiki, Article.page_id == int(identifier["pageids"])))
+    freshness = utc(cached.resolved_at) if cached else None
+    if alias and cached:
+        freshness = min(freshness, utc(alias.resolved_at))
+    if freshness and freshness > now() - timedelta(hours=1):
         return article_json(cached)
     try:
         page = client.query(wiki, identifier)  # No user/event lock is held over this request.
@@ -97,9 +105,17 @@ def resolve(db, client, data):
             return article_json(cached, stale=True)
         raise
     if "missing" in page or page.get("pageid", -1) <= 0:
+        if cached and title and title != cached.title:
+            # Missing redirect sources do not make their canonical target disappear.
+            if alias:
+                db.delete(alias)
+                db.commit()
+            raise APIError("article_not_found", 404)
         if cached:
             cached.availability, cached.trackable, cached.untrackable_reason = "missing", False, "missing"
             cached.resolved_at = now()
+            if alias:
+                alias.resolved_at = cached.resolved_at
             db.commit()
             return article_json(cached)
         raise APIError("article_not_found", 404)
@@ -112,19 +128,26 @@ def resolve(db, client, data):
     canonical_wiki, _ = parse_article_url(canonical_url)
     if canonical_wiki != wiki:
         raise APIError("wikipedia_unavailable", 503, True)
-    article = db.scalar(select(Article).where(Article.wiki == wiki, Article.page_id == page["pageid"]))
-    if article is None:
-        article = Article(wiki=wiki, page_id=page["pageid"])
-        db.add(article)
-    article.title, article.canonical_url, article.namespace = page["title"], canonical_url, page["ns"]
-    article.trackable, article.untrackable_reason, article.availability = reason is None, reason, "available"
-    article.latest_revision_id = (page.get("revisions") or [{}])[0].get("revid")
-    article.resolved_at = now()
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        article = db.scalar(select(Article).where(Article.wiki == wiki, Article.page_id == page["pageid"]))
-        if not article:
-            raise
-    return article_json(article)
+    for attempt in range(2):
+        try:
+            article = db.scalar(select(Article).where(Article.wiki == wiki, Article.page_id == page["pageid"]))
+            if article is None:
+                article = Article(wiki=wiki, page_id=page["pageid"])
+                db.add(article)
+            article.title, article.canonical_url, article.namespace = page["title"], canonical_url, page["ns"]
+            article.trackable, article.untrackable_reason, article.availability = reason is None, reason, "available"
+            article.latest_revision_id = (page.get("revisions") or [{}])[0].get("revid")
+            article.resolved_at = now()
+            db.flush()
+            for alias_title in sorted({page["title"], title} - {None}):
+                current = db.scalar(select(ArticleAlias).where(ArticleAlias.wiki == wiki, ArticleAlias.title == alias_title))
+                if current is None:
+                    current = ArticleAlias(wiki=wiki, title=alias_title)
+                    db.add(current)
+                current.article_id, current.resolved_at = article.id, article.resolved_at
+            db.commit()
+            return article_json(article)
+        except IntegrityError:
+            db.rollback()
+            if attempt:
+                raise

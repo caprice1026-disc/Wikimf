@@ -14,6 +14,7 @@ await context.addCookies([fixture.cookie]);
 const page = await context.newPage();
 const problems = [], failures = [];
 const deviceLabel = 'Dashboard browser QA ' + Date.now();
+let crossSource = null;
 page.on('pageerror', error => problems.push(error.message));
 page.on('response', response => { if (response.status() >= 500 && response.url().includes('/api/v1/')) failures.push(response.status()); });
 
@@ -55,6 +56,22 @@ try {
   await page.getByRole('heading', { name: 'Activity', exact: true }).waitFor();
   await page.waitForLoadState('networkidle');
   assert.equal(await page.locator('[role=alert]').count(), 0);
+  if (process.env.DASHBOARD_REQUIRE_BOTH_SOURCES === '1') {
+    const activitiesResponse = await context.request.get(`${base}/api/v1/me/activities?limit=100`);
+    assert.equal(activitiesResponse.status(), 200);
+    const activities = (await activitiesResponse.json()).items;
+    crossSource = {};
+    for (const [source, label] of [['android_reader', 'Android'], ['chrome_extension', 'Chrome']]) {
+      const rows = activities.filter(item => item.source === source && item.active_ms >= 10000);
+      assert.ok(rows.length > 0, `same owner has qualified ${source} readings`);
+      crossSource[source] = { activities: rows.length, active_ms: rows.reduce((total, row) => total + row.active_ms, 0) };
+      await page.goto(`${base}/app/activity?source=${source}`);
+      await page.getByRole('heading', { name: 'Activity', exact: true }).waitFor();
+      await page.waitForLoadState('networkidle');
+      assert.equal(await page.locator('.reading-row').count(), rows.length);
+      assert.ok((await page.locator('.reading-meta').allTextContents()).every(text => text.includes(label)));
+    }
+  }
   await page.goto(`${base}/app/stats?period=30d&timezone=America%2FNew_York`);
   await page.getByRole('heading', { name: '日ごとの読書時間', exact: true }).waitFor();
   await page.waitForLoadState('networkidle');
@@ -102,6 +119,6 @@ try {
   assert.equal(await page.locator('body').evaluate(el => el.scrollWidth > window.innerWidth), false);
   assert.deepEqual(problems, []);
   assert.deepEqual(failures, []);
-  await writeFile(new URL('../output/real-api-browser-smoke.json', import.meta.url), JSON.stringify({ result: 'pass', data: 'isolated synthetic QA user', transport: 'real HTTP API with provided PostgreSQL QA server', verified: ['cookie-session-csrf-read', 'overview', 'server-library-filter-sort', 'article-record-delete-cancel', 'activity-source-filter', 'statistics-period-timezone', 'achievements', 'privacy-controls', 'explicit-grant-approval', 'native-grant-exchange', 'own-device-revocation', 'revoked-token-rejected', '390px-no-overflow'], browserErrors: 0, serverErrors: 0 }, null, 2));
-  console.log('Dashboard actual API browser smoke: PASS (13 checks; synthetic QA records, real HTTP/API).');
+  await writeFile(new URL('../output/real-api-browser-smoke.json', import.meta.url), JSON.stringify({ result: 'pass', verified_at: new Date().toISOString(), data: 'isolated synthetic QA user', transport: 'real HTTP API with provided PostgreSQL QA server', verified: ['cookie-session-csrf-read', 'overview', 'server-library-filter-sort', 'article-record-delete-cancel', 'activity-source-filter', 'statistics-period-timezone', 'achievements', 'privacy-controls', 'explicit-grant-approval', 'native-grant-exchange', 'own-device-revocation', 'revoked-token-rejected', '390px-no-overflow', ...(crossSource ? ['same-owner-android-chrome-visible-readings'] : [])], cross_source: crossSource, browserErrors: 0, serverErrors: 0 }, null, 2));
+  console.log(`Dashboard actual API browser smoke: PASS (${crossSource ? 14 : 13} checks; synthetic QA identity/metadata, real HTTP/API).`);
 } finally { await browser.close(); }

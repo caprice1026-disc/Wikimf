@@ -100,6 +100,16 @@ class Article(Base):
     resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class ArticleAlias(Base):
+    __tablename__ = "article_aliases"
+    __table_args__ = (UniqueConstraint("wiki", "title"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    wiki: Mapped[str] = mapped_column(String(10))
+    title: Mapped[str] = mapped_column(String(500))
+    article_id: Mapped[str] = mapped_column(ForeignKey("articles.id", ondelete="CASCADE"))
+    resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class ReadingSession(Base):
     __tablename__ = "reading_sessions"
     __table_args__ = (UniqueConstraint("user_id", "session_id"), ForeignKeyConstraint(["device_id", "user_id"], ["devices.id", "devices.user_id"]))
