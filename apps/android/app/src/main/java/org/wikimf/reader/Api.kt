@@ -1,8 +1,13 @@
 package org.wikimf.reader
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.work.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.*
@@ -30,9 +35,10 @@ class Api(private val settings: Settings) {
         })
     }
     suspend fun request(path: String, body: JSONObject? = null, device: LinkedDevice? = settings.device()): JSONObject {
-        val base = URI(settings.apiUrl)
-        require(validBase(settings.apiUrl)) { "API URLにはHTTPSを指定してください" }
-        val builder = Request.Builder().url(settings.apiUrl + path).header("Accept", "application/json")
+        val apiUrl = settings.apiUrl
+        require(validBase(apiUrl)) { "API URLにはHTTPSを指定してください" }
+        if (device != null && device != settings.device()) throw ApiFailure(401, "device_binding_changed")
+        val builder = Request.Builder().url(apiUrl + path).header("Accept", "application/json")
         if (device != null) builder.header("Authorization", "Bearer ${device.token}")
         if (body != null) builder.post(body.toString().toRequestBody("application/json".toMediaType()))
         return execute(builder.build()).use { response ->
@@ -42,10 +48,32 @@ class Api(private val settings: Settings) {
             json
         }
     }
+    suspend fun refreshDashboardOrigin() {
+        val expectedApi = settings.apiUrl
+        try {
+            val value = request("/config", device = null).optString("dashboard_url")
+            val origin = DashboardUrls.configuredOrigin(expectedApi, value, BuildConfig.DEBUG) ?: return
+            if (settings.apiUrl == expectedApi) settings.dashboardOrigin = origin
+        } catch (failure: Exception) {
+            if (failure is CancellationException) throw failure
+            // Offline/older servers retain the cached origin or same-origin fallback.
+        }
+    }
     suspend fun search(wiki: String, query: String, full: Boolean): List<HistoryEntry> {
+        while (true) {
+            val remaining = searchCooldown.remaining(wiki, SystemClock.elapsedRealtime())
+            if (remaining == 0L) break
+            delay(remaining)
+        }
+        currentCoroutineContext().ensureActive()
         val host = if (wiki == "jawiki") "ja" else "en"
         val url = "https://$host.wikipedia.org/w/rest.php/v1/search/${if (full) "page" else "title"}?q=${URLEncoder.encode(query.trim(), "UTF-8")}&limit=${if (full) 20 else 10}"
         return execute(Request.Builder().url(url).header("User-Agent", "wikimf/0.1.0 (Android reader)").build()).use { response ->
+            if (response.code == 429) {
+                val wait = RetryAfter.delayMillis(response.header("Retry-After"), System.currentTimeMillis())
+                searchCooldown.block(wiki, SystemClock.elapsedRealtime(), wait)
+                throw ApiFailure(429, "wikipedia_429", wait)
+            }
             if (!response.isSuccessful) throw ApiFailure(response.code, "wikipedia_${response.code}")
             val pages = JSONObject(response.body?.string() ?: "{}").getJSONArray("pages")
             List(pages.length()) { index ->
@@ -58,6 +86,7 @@ class Api(private val settings: Settings) {
         }
     }
     companion object {
+        private val searchCooldown = SearchCooldown()
         fun validBase(raw: String): Boolean = runCatching {
             val uri = URI(raw)
             val secure = uri.scheme == "https" || (BuildConfig.DEBUG && uri.scheme == "http" && uri.host in setOf("10.0.2.2", "localhost", "127.0.0.1"))

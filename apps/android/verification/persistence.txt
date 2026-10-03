@@ -1,0 +1,6 @@
+
+org.wikimf.reader.PersistenceTest:..
+
+Time: 0.124
+
+OK (2 tests)

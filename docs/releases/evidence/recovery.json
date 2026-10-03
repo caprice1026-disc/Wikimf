@@ -1,0 +1,18 @@
+{
+  "result": "pass",
+  "database": "PostgreSQL17.6",
+  "checks": [
+    "empty-migration-upgrade-downgrade-upgrade",
+    "retained-data-migration-0002-to-0003",
+    "actual-pg-dump-restore",
+    "article-deletion-not-resurrected",
+    "account-deletion-not-resurrected",
+    "epoch-all-history-not-resurrected",
+    "all-old-device-tokens-refused",
+    "all-web-sessions-revoked",
+    "manual-states-not-resurrected",
+    "collection-and-publication-disabled",
+    "unlinked-identity-not-restored",
+    "missing-post-backup-article-safe"
+  ]
+}

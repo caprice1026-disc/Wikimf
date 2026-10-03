@@ -1,0 +1,14 @@
+{
+  "rows_before_recovery": 2,
+  "quarantined_before_recovery": 0,
+  "max_active_ms_total_before_recovery": 57834,
+  "sessions": [
+    "59e827a4-ae35-4738-a50f-4ed04782ff1e"
+  ],
+  "rows_after_recovery": 0,
+  "recovery_observation_seconds": 2.12,
+  "accepted_active_ms_after_recovery": 81821,
+  "accepted_coverage_after_recovery": 0.012409257305950239,
+  "quarantined_after_recovery": false,
+  "passed": true
+}

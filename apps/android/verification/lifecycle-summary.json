@@ -1,0 +1,10 @@
+{
+  "search_preserves_document_position_history_session": true,
+  "search_focus_restored": true,
+  "fragment_preserves_session": true,
+  "background_return_preserves_session": true,
+  "rotation_preserves_position": true,
+  "rotation_starts_new_sessions": true,
+  "native_back_forward_before_and_after_rotation": true,
+  "forward_restores_saved_position_after_rotation": true
+}

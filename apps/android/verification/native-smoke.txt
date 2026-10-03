@@ -1,7 +1,7 @@
 
 org.wikimf.reader.ReaderFocusRegressionTest:.
 
-Time: 27.085
+Time: 26.046
 
 OK (1 test)
 

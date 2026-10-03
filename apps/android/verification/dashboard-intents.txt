@@ -1,0 +1,6 @@
+
+org.wikimf.reader.DashboardLinkIntegrationTest:.
+
+Time: 5.356
+
+OK (1 test)

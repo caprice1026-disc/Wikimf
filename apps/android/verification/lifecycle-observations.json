@@ -1,0 +1,154 @@
+[
+  {
+    "label": "before_search",
+    "url": "https://en.wikipedia.org/wiki/Earth",
+    "scrollY": 1800,
+    "historyLength": 1,
+    "focus": true,
+    "sessionId": "0cd57277-b250-4474-892d-346ac98910ee",
+    "ready": "complete"
+  },
+  {
+    "label": "search_overlay",
+    "url": "https://en.wikipedia.org/wiki/Earth",
+    "scrollY": 1800,
+    "historyLength": 1,
+    "focus": false,
+    "sessionId": "0cd57277-b250-4474-892d-346ac98910ee"
+  },
+  {
+    "label": "return_from_search",
+    "url": "https://en.wikipedia.org/wiki/Earth",
+    "scrollY": 1800,
+    "historyLength": 1,
+    "focus": true,
+    "sessionId": "0cd57277-b250-4474-892d-346ac98910ee"
+  },
+  {
+    "label": "same_document_fragment",
+    "url": "https://en.wikipedia.org/wiki/Earth#Physical_characteristics",
+    "scrollY": 1800,
+    "historyLength": 2,
+    "focus": true,
+    "sessionId": "0cd57277-b250-4474-892d-346ac98910ee"
+  },
+  {
+    "label": "landscape_recreation",
+    "url": "https://en.wikipedia.org/wiki/Earth#Physical_characteristics",
+    "scrollY": 1800,
+    "historyLength": 3,
+    "focus": true,
+    "sessionId": "963db6fa-57d0-4507-b62b-5a2f1bdca9ef",
+    "width": 851
+  },
+  {
+    "label": "portrait_recreation",
+    "url": "https://en.wikipedia.org/wiki/Earth#Physical_characteristics",
+    "scrollY": 1800,
+    "historyLength": 3,
+    "focus": true,
+    "sessionId": "cf747b75-8085-4d34-bc8e-361fb176a072",
+    "ready": "complete",
+    "width": 393
+  },
+  {
+    "label": "native_search_earth",
+    "url": "https://en.wikipedia.org/wiki/Earth#Physical_characteristics",
+    "scrollY": 0,
+    "historyLength": 3,
+    "focus": true,
+    "sessionId": "327c01b6-1fbe-4dd9-b92c-9baa45956e89",
+    "ready": "complete",
+    "width": 393
+  },
+  {
+    "label": "native_search_moon",
+    "url": "https://en.wikipedia.org/wiki/Moon",
+    "scrollY": 0,
+    "historyLength": 4,
+    "focus": true,
+    "sessionId": "44484220-c549-49d7-a841-4ea8f950e777",
+    "ready": "complete",
+    "width": 393
+  },
+  {
+    "label": "native_reader_back",
+    "url": "https://en.wikipedia.org/wiki/Earth#Physical_characteristics",
+    "scrollY": 0,
+    "historyLength": 4,
+    "focus": true,
+    "sessionId": "d8251201-dbe6-4b99-a643-118379cfb6c9",
+    "ready": "complete",
+    "width": 393
+  },
+  {
+    "label": "native_reader_forward",
+    "url": "https://en.wikipedia.org/wiki/Moon",
+    "scrollY": 0,
+    "historyLength": 4,
+    "focus": true,
+    "sessionId": "922cc30d-8d61-4cad-b285-54f11fb905d9",
+    "ready": "complete",
+    "width": 393
+  },
+  {
+    "label": "before_background",
+    "url": "https://en.wikipedia.org/wiki/Moon",
+    "scrollY": 1000,
+    "historyLength": 4,
+    "focus": true,
+    "sessionId": "922cc30d-8d61-4cad-b285-54f11fb905d9",
+    "ready": "complete",
+    "width": 393
+  },
+  {
+    "label": "resume_from_background",
+    "url": "https://en.wikipedia.org/wiki/Moon",
+    "scrollY": 1030.54541015625,
+    "historyLength": 4,
+    "focus": true,
+    "sessionId": "922cc30d-8d61-4cad-b285-54f11fb905d9",
+    "ready": "complete",
+    "width": 393
+  },
+  {
+    "label": "native_moon_landscape",
+    "url": "https://en.wikipedia.org/wiki/Moon",
+    "scrollY": 1030.54541015625,
+    "historyLength": 4,
+    "focus": true,
+    "sessionId": "4babfcd8-b9f5-4d49-b2a8-419c5bb82191",
+    "ready": "complete",
+    "width": 851
+  },
+  {
+    "label": "native_moon_portrait",
+    "url": "https://en.wikipedia.org/wiki/Moon",
+    "scrollY": 1030.54541015625,
+    "historyLength": 4,
+    "focus": true,
+    "sessionId": "18b9f3df-656e-4568-8961-89c43fc1d003",
+    "ready": "complete",
+    "width": 393
+  },
+  {
+    "label": "native_back_after_rotation",
+    "url": "https://en.wikipedia.org/wiki/Earth#Physical_characteristics",
+    "scrollY": 0,
+    "historyLength": 4,
+    "focus": true,
+    "sessionId": "9438d98a-6f53-4453-8565-bc6fd43438da",
+    "ready": "complete",
+    "width": 393
+  },
+  {
+    "label": "native_forward_after_rotation",
+    "url": "https://en.wikipedia.org/wiki/Moon",
+    "scrollY": 1030.54541015625,
+    "historyLength": 4,
+    "focus": true,
+    "sessionId": "1ac28dd2-4ade-4a52-afdc-8a5def7d7381",
+    "ready": "complete",
+    "width": 393
+  }
+]

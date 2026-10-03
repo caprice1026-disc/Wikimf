@@ -3,6 +3,7 @@ package org.wikimf.reader
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.json.JSONObject
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,9 +41,11 @@ class PersistenceTest {
             assertTrue(store.history("alice", "viewed", "enwiki").isEmpty())
         }
     }
-    @Test fun tokenIsEncryptedSeparatelyAndLinkingRequiresNewCloudConsent() {
+    @Test fun tokenIsEncryptedSeparatelyAndLinkingRequiresNewCloudConsent() = runBlocking {
         val settings = Settings(context)
         settings.unlink()
+        val originalApi = settings.apiUrl
+        settings.apiUrl = "https://old-api.example/api/v1"
         settings.cloudConsent = true
         val device = LinkedDevice(UUID.randomUUID().toString(), UUID.randomUUID().toString(), "synthetic-no-authority-token", "Fixture")
         settings.saveDevice(device)
@@ -50,7 +53,28 @@ class PersistenceTest {
         assertFalse(settings.cloudConsent)
         val stored = context.getSharedPreferences("encrypted_credentials", 0).getString("device", "")!!
         assertFalse(stored.contains(device.token))
-        settings.unlink()
+        settings.cloudConsent = true
+        LocalStore(context).use { store ->
+            val event = JSONObject().put("event_id", UUID.randomUUID().toString()).put("recording_epoch", 1)
+            assertTrue(store.enqueue(device, event, null))
+            settings.apiUrl = "https://old-api.example/api/v1"
+            assertEquals(device, settings.device()); assertTrue(settings.cloudConsent)
+            settings.apiUrl = "https://old-api.example/api/v1/"
+            assertEquals(device, settings.device()); assertTrue(settings.cloudConsent)
+            settings.apiUrl = "https://new-api.example/api/v1"
+            assertNull(settings.device()); assertFalse(settings.cloudConsent)
+            assertEquals(1, store.count(device.userId))
+            assertEquals(device.deviceId, store.rows(device).single().device)
+            try {
+                Api(settings).request("/me", device = device)
+                fail("A captured old credential must be refused before requesting a new API host")
+            } catch (failure: ApiFailure) {
+                assertEquals(401, failure.code)
+                assertEquals("device_binding_changed", failure.errorCode)
+            }
+            store.discard(device.userId)
+        }
+        settings.apiUrl = originalApi
         assertNull(settings.device())
     }
 }

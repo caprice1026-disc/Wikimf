@@ -1,0 +1,34 @@
+{
+  "result": "pass",
+  "verified_at": "2026-10-03T21:55:35.889Z",
+  "data": "isolated synthetic QA user",
+  "transport": "real HTTP API with provided PostgreSQL QA server",
+  "verified": [
+    "cookie-session-csrf-read",
+    "overview",
+    "server-library-filter-sort",
+    "article-record-delete-cancel",
+    "activity-source-filter",
+    "statistics-period-timezone",
+    "achievements",
+    "privacy-controls",
+    "explicit-grant-approval",
+    "native-grant-exchange",
+    "own-device-revocation",
+    "revoked-token-rejected",
+    "390px-no-overflow",
+    "same-owner-android-chrome-visible-readings"
+  ],
+  "cross_source": {
+    "android_reader": {
+      "activities": 12,
+      "active_ms": 544522
+    },
+    "chrome_extension": {
+      "activities": 7,
+      "active_ms": 130094
+    }
+  },
+  "browserErrors": 0,
+  "serverErrors": 0
+}

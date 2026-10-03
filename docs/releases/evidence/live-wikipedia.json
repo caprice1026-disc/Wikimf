@@ -1,0 +1,29 @@
+{
+  "browser": "154.0.8037.93",
+  "live_wikipedia": true,
+  "tracker": "prose-v1",
+  "results": [
+    {
+      "url": "https://ja.wikipedia.org/wiki/%E5%9C%B0%E7%90%83",
+      "status": "ok",
+      "reason": null,
+      "text_chars": 16290,
+      "chunks": 133,
+      "fingerprint": "0d0c80eb41ddd9b492f07368e05a247d202b3d87623a2338c49a616e32f5d34a",
+      "extraction_ms": 38.5,
+      "excluded_infobox_chunks": 0,
+      "ordinary_colon": true
+    },
+    {
+      "url": "https://en.wikipedia.org/wiki/Earth",
+      "status": "ok",
+      "reason": null,
+      "text_chars": 48352,
+      "chunks": 296,
+      "fingerprint": "1e62139348a91b6d9f530b558316acff25b4c275dae4d92ff8d5302cbc66c0a4",
+      "extraction_ms": 26.8,
+      "excluded_infobox_chunks": 0,
+      "ordinary_colon": true
+    }
+  ]
+}

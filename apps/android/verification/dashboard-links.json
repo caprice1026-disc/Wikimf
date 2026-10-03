@@ -1,0 +1,29 @@
+{
+  "public_config": {
+    "dashboard_url": "http://localhost:5173"
+  },
+  "native_settings": {
+    "api_url": "http://10.0.2.2:8000/api/v1",
+    "dashboard_origin": "http://10.0.2.2:5173"
+  },
+  "privacy_browser_intent": [
+    "dat=http://10.0.2.2:5173/app/settings/privacy"
+  ],
+  "passed": true,
+  "overview_browser_intent": [
+    "http://10.0.2.2:5173/app"
+  ],
+  "overview_passed": true,
+  "browser_handoff": "Actual Chrome handoff verified separately; Chrome first-run screen retained without terms acceptance or sign-in",
+  "captured_compose_action_view_urls": [
+    "http://10.0.2.2:5173/app",
+    "http://10.0.2.2:5173/app/settings/privacy"
+  ],
+  "native_intent_test": {
+    "tests": 1,
+    "failures": 0,
+    "seconds": 5.356,
+    "explicit_flag": "native_dashboard_smoke=true",
+    "activity_monitor": "Real Compose button ACTION_VIEW captured before dispatch; no browser login or destructive action"
+  }
+}

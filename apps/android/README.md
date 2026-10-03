@@ -13,13 +13,15 @@ powershell -ExecutionPolicy Bypass -File apps/android/build.ps1
 
 ## Implementation decisions
 
-Native SQLiteOpenHelper transactions provide the proposed Room persistence contract without an additional code-generation plugin. Queue rows bind permanently to the creating owner/device, preserve an immutable payload once pending article resolution is finalized, and remove only item ACKs. Credential storage is separate, encrypted with an Android Keystore AES-GCM key. Failed, expired and deleted-generation events are quarantined with visible counts. A 10 MiB queue stops new recording instead of overwriting existing records. Seven-day expiration is visible quarantine, rather than silent eviction.
+Native SQLiteOpenHelper transactions provide the proposed Room persistence contract without an additional code-generation plugin. Queue rows bind permanently to the creating owner/device, preserve an immutable payload once pending article resolution is finalized, and remove only item ACKs. Credential storage is separate, encrypted with an Android Keystore AES-GCM key. Changing the API URL clears credentials and cloud consent before publishing the new destination, while preserving the old owner's queue. A request holding an earlier device credential is refused before HTTP if it differs from the current linked device. Setting the same URL, including a trailing slash, preserves the link. Failed, expired and deleted-generation events are quarantined with visible counts. A 10 MiB queue stops new recording instead of overwriting existing records. Seven-day expiration is visible quarantine, rather than silent eviction.
 
 Only exact Japanese/English HTTPS origins receive the AndroidX WebKit observation bridge. Each message is checked again for main-frame origin, payload size/rate, native-issued session ID, increasing sequence, interval/chunk validity and immutable document metadata. No token/user ID goes to Wikipedia JS. Older WebViews without the safe bridge retain Reader functionality and explain that measurement is unavailable. Tracker injection occurs after page readiness and never backfills missed time. Same-page anchors preserve the document session.
 
-Search calls Wikipedia directly, with 300 ms debounce, IME composition suppression, actual HTTP cancellation and request generation checks. Only articles actually opened enter the local search history. Search errors, empty results and loading are separate; HTML excerpts render as text.
+Search calls Wikipedia directly, with 300 ms debounce, IME composition suppression, actual HTTP cancellation and request generation checks. HTTP 429 establishes a process-wide, per-wiki monotonic deadline using Retry-After seconds or HTTP-date; invalid/missing values use 30 seconds. Cancellable retries and reopening Search respect the deadline, and only the latest query generation continues. Only articles actually opened enter the local search history. Search errors, empty results and loading are separate; HTML excerpts render as text.
 
 Foreground saves use WorkManager as a durable retry trigger, not a ten-second background guarantee. ACKs handle partial success, 413 splits, 422 quarantine, Retry-After and jittered backoff; 401/403 wait for explicit re-linking. Current recording controls are fetched before replay so epoch/article deletion markers reject old pending rows. Statistics and the three reading states use the server's owner-checked responses; manual state and privacy controls link to Dashboard.
+
+Browser management links use the public `dashboard_url` returned by anonymous `GET /api/v1/config`. The validated origin is cached for the configured API; changing the API clears that cache. Offline/older servers retain the cached origin or use the API's origin. Overview, article/library and privacy paths are `/app`, `/app/articles/{id}` or `/app/library`, and `/app/settings/privacy`. Pairing URLs must match the configured Dashboard origin and displayed grant. Only a debug emulator configured with API host `10.0.2.2` maps the server's loopback Dashboard host to `10.0.2.2`; HTTPS release URLs retain their declared host.
 
 ## Emulator / ST checks
 
@@ -32,5 +34,14 @@ powershell -ExecutionPolicy Bypass -File apps/android/test-device.ps1
 ```
 
 Instrumentation checks real SQLite reopen/immutability/account isolation/deletion epoch and Keystore encryption. For the complete smoke test, install the debug APK, enter the real HTTPS `/api/v1` URL in Account, approve the displayed device code through Google and GitHub in a browser, return and confirm linking, enable Dashboard collection plus native cloud consent, and read an article actively for at least 30 seconds. Verify its owner, intervals, time and state in Dashboard. Repeat offline recovery, Account/Search/background pause, article/full deletion with a saved old queue, and unlink/re-link to a different account. Inspect only synthetic accounts and redact credentials from evidence. Real provider registration, HTTPS service reachability and final release signing remain operator prerequisites.
+
+The live-page focus regression runs only when explicitly enabled against an already linked synthetic account with cloud recording enabled:
+
+```powershell
+adb -s emulator-5554 shell am instrument -w -e native_smoke true -e class org.wikimf.reader.ReaderFocusRegressionTest org.wikimf.reader.test/androidx.test.runner.AndroidJUnitRunner
+adb -s emulator-5554 shell am instrument -w -e native_dashboard_smoke true -e class org.wikimf.reader.DashboardLinkIntegrationTest org.wikimf.reader.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The second command exercises the real Compose management buttons against the local API at `10.0.2.2:8000` with Dashboard origin `localhost:5173`. It captures the browser intents without signing in or accepting browser terms. Without their explicit flags, these external-service tests are skipped; the default runner's total is not evidence that they passed. [VERIFICATION.md](VERIFICATION.md) records the actual emulator run and its limits. An unsigned release APK can be built with `build.ps1 -Tasks assembleRelease`; the final release identifier, HTTPS API address and signing key must be supplied before distribution.
 
 Debug builds alone permit HTTP to `10.0.2.2`, `127.0.0.1` and `localhost` for local integration tests. Release builds require HTTPS. No arbitrary external cleartext API is accepted.

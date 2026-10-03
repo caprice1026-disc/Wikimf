@@ -16,7 +16,6 @@
       "coverage": 0.012409257305950239,
       "measurement_status": "ok",
       "quarantined": false,
-      "effective_state": null,
       "state": "partial"
     },
     {
@@ -26,7 +25,6 @@
       "coverage": 0.012409257305950239,
       "measurement_status": "ok",
       "quarantined": false,
-      "effective_state": null,
       "state": "viewed"
     },
     {
@@ -36,7 +34,6 @@
       "coverage": 0.004136419101983413,
       "measurement_status": "ok",
       "quarantined": false,
-      "effective_state": null,
       "state": "viewed"
     },
     {
@@ -46,7 +43,6 @@
       "coverage": 0.012409257305950239,
       "measurement_status": "ok",
       "quarantined": false,
-      "effective_state": null,
       "state": "partial"
     }
   ],
@@ -109,12 +105,48 @@
     {
       "path": "apps/android/app/build/outputs/apk/debug/app-debug.apk",
       "bytes": 10308405,
-      "sha256": "4ca42fb64bf69acbd9423c16f9516f462923585a1d8271c6571f66ed9320afae"
+      "sha256": "ff44c1177a704138918b70734dedb474b4fe452c735a2f652e944a9f794b6a44"
     },
     {
       "path": "apps/android/app/build/outputs/apk/release/app-release-unsigned.apk",
       "bytes": 7339322,
-      "sha256": "c77b188b04495bbcd8ad7dee391a27bed646f74d38d47fc635085b245a1979b2"
+      "sha256": "50ca065b45927fe8b569166a8eb7df925cfd0892380c20cfff9a2f82c2a3e573"
     }
-  ]
+  ],
+  "build_checks": {
+    "unit_tests": 10,
+    "unit_failures": 0,
+    "native_persistence_tests": 2,
+    "explicit_native_smoke_tests": 1,
+    "lint_errors": 0,
+    "lint_warnings": 9,
+    "release_unsigned_build": "success",
+    "explicit_native_smoke_seconds": 26.046,
+    "explicit_dashboard_intent_tests": 1,
+    "explicit_dashboard_intent_seconds": 5.356,
+    "native_passed_total": 4,
+    "final_native_suite_seconds": 28.407,
+    "final_native_suite_evidence": "apps/android/verification/native-final-suite.txt",
+    "final_build_verified_at": "2026-10-03T22:16:15.615110+00:00",
+    "api_destination_credential_boundary": true,
+    "search_retry_after_cooldown": true
+  },
+  "tracker_asset_sha256": "aff6e2c5b8e9cc76b3bbe4bfc6b03b73019f886db4370095390430dfbe19a431",
+  "tracker_matches_source": true,
+  "credential_boundary_regressions": {
+    "storage_realm": "Device protected, isolated from linked credential-protected QA account",
+    "same_url_preserves_link_and_consent": true,
+    "trailing_slash_preserves_link_and_consent": true,
+    "changed_url_clears_credentials_and_consent": true,
+    "old_owner_device_queue_retained": true,
+    "captured_old_device_refused_before_http": true,
+    "evidence": "Final native PersistenceTest assertions"
+  },
+  "search_cooldown_regressions": {
+    "tests": 3,
+    "passed": 3,
+    "retry_after": "Seconds / HTTP-date / invalid fallback 30 seconds / overflow",
+    "deadline": "Per-wiki process lifetime, monotonic, cannot shorten, cancellable latest query",
+    "actual_injected_429_ui": "ST-06 pending"
+  }
 }

@@ -20,7 +20,17 @@ class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("preferences", Context.MODE_PRIVATE)
     var apiUrl: String
         get() = prefs.getString("api_url", BuildConfig.DEFAULT_API_URL)!!
-        set(value) { prefs.edit().putString("api_url", value.trimEnd('/')).apply() }
+        set(value) {
+            val normalized = value.trimEnd('/')
+            if (normalized != apiUrl) {
+                // Clear credentials before publishing a different API destination.
+                unlink()
+                prefs.edit().putString("api_url", normalized).remove("dashboard_origin").apply()
+            }
+        }
+    var dashboardOrigin: String?
+        get() = DashboardUrls.base(apiUrl, prefs.getString("dashboard_origin", null), BuildConfig.DEBUG)
+        set(value) { prefs.edit().putString("dashboard_origin", value).apply() }
     var localConsent: Boolean
         get() = prefs.getBoolean("local_consent", false)
         set(value) { prefs.edit().putBoolean("local_consent", value).apply() }

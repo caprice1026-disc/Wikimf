@@ -61,7 +61,8 @@ class MainActivity : ComponentActivity() {
         var renderGeneration by remember { mutableIntStateOf(0) }
         val device = remember(tick) { settings.device() }
         val owner = device?.userId ?: "guest"
-        val dashboard = settings.apiUrl.removeSuffix("/api/v1")
+        val dashboard = settings.dashboardOrigin
+        LaunchedEffect(settings.apiUrl, foreground) { if (foreground) { Api(settings).refreshDashboardOrigin(); tick++ } }
         val controller = remember {
             ReaderController(this, settings, store, scope,
                 active = { foreground && focused && tab == "reader" && !search && external == null && actionDialog == null && message == null && !menu },
@@ -94,7 +95,7 @@ class MainActivity : ComponentActivity() {
                             DropdownMenuItem(text = { Text("再読み込み") }, onClick = { menu = false; if (controller.crashed) { renderGeneration++; controller.crashed = false } else controller.webView?.reload() })
                             DropdownMenuItem(text = { Text("ブラウザで開く") }, onClick = { menu = false; external = controller.url })
                             DropdownMenuItem(text = { Text("URLを共有") }, onClick = { menu = false; startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, controller.url), "URLを共有")) })
-                            DropdownMenuItem(text = { Text("記事の状態・削除") }, onClick = { menu = false; openBrowser(controller.articleId?.let { "$dashboard/articles/$it" } ?: "$dashboard/library") })
+                            DropdownMenuItem(text = { Text("記事の状態・削除") }, enabled = dashboard != null, onClick = { menu = false; dashboard?.let { openBrowser(DashboardUrls.article(it, controller.articleId)) } })
                             DropdownMenuItem(text = { Text(if (settings.paused) "記録を再開" else "記録を一時停止") }, onClick = { menu = false; settings.paused = !settings.paused; tick++ })
                         }
                     }
@@ -141,13 +142,14 @@ class MainActivity : ComponentActivity() {
         if (input.composition != null || request.query.isEmpty()) { gate.cancel(); loading = false; error = null; hits = emptyList(); return }
         requestJob = scope.launch {
             if (!immediate) delay(300)
+            if (!gate.current(request)) return@launch
             loading = true; error = null
             try {
                 val result = Api(settings).search(request.language, request.query, request.full)
                 if (gate.current(request)) { hits = result; loading = false }
             } catch (failure: Exception) {
                 if (failure is CancellationException) throw failure
-                if (gate.current(request)) { error = if (failure is ApiFailure) "Wikipedia検索エラー (${failure.code})" else "オフラインまたは通信エラー"; loading = false; hits = emptyList() }
+                if (gate.current(request)) { error = if (failure is ApiFailure && failure.code == 429) "検索が一時的に制限されています。再試行すると待ち時間後に検索します" else if (failure is ApiFailure) "Wikipedia検索エラー (${failure.code})" else "オフラインまたは通信エラー"; loading = false; hits = emptyList() }
             }
         }
     }
@@ -214,12 +216,12 @@ class MainActivity : ComponentActivity() {
                 item { OutlinedTextField(apiUrl, { apiUrl = it }, label = { Text("wikimf API URL (HTTPS /api/v1)") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
                 item { Button(enabled = !busy, onClick = {
                     runCatching { require(Api.validBase(apiUrl)); settings.apiUrl = apiUrl }.onSuccess {
-                        perform { pairing = Api(settings).request("/device-links", JSONObject().put("source", "android_reader").put("display_name", "Android Reader"), null); pairingStatus = null }
+                        perform { val api = Api(settings); api.refreshDashboardOrigin(); pairing = api.request("/device-links", JSONObject().put("source", "android_reader").put("display_name", "Android Reader"), null); pairingStatus = null }
                     }.onFailure { pairingStatus = "HTTPSのAPI URLを指定してください" }
                 }) { Text("Google / GitHubで端末連携") } }
                 pairing?.let { grant ->
                     item { Text("確認コード: ${grant.getString("user_code")}\n有効期限: ${grant.getString("expires_at")}") }
-                    item { Button(onClick = { val verification = grant.getString("verification_url"); if (URI(verification).host == URI(settings.apiUrl).host && URI(verification).scheme == "https") openBrowser(verification) else pairingStatus = "連携URLがAPIのホストと一致しません" }) { Text("Webでログイン・承認") } }
+                    item { Button(onClick = { val target = settings.dashboardOrigin?.let { DashboardUrls.pairing(settings.apiUrl, it, grant.getString("verification_url"), grant.getString("link_id"), BuildConfig.DEBUG) }; if (target != null) openBrowser(target) else pairingStatus = "安全な管理画面の連携URLを確認できません" }) { Text("Webでログイン・承認") } }
                     item { Button(enabled = !busy, onClick = { perform {
                         val result = Api(settings).request("/device-links/${grant.getString("link_id")}/exchange", JSONObject().put("device_secret", grant.getString("device_secret")), null)
                         settings.saveDevice(LinkedDevice(result.getString("user_id"), result.getString("device_id"), result.getString("token"), result.getString("display_name")))
@@ -245,8 +247,8 @@ class MainActivity : ComponentActivity() {
             }
             pairingStatus?.let { item { Text(it) } }
             if (busy) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-            item { Button(onClick = { openBrowser(settings.apiUrl.removeSuffix("/api/v1") + "/home") }) { Text("Dashboardを開く") } }
-            item { TextButton(onClick = { openBrowser(settings.apiUrl.removeSuffix("/api/v1") + "/settings/privacy") }) { Text("全端末の記録停止・削除・export・公開設定") } }
+            item { Button(enabled = settings.dashboardOrigin != null, onClick = { settings.dashboardOrigin?.let { openBrowser(DashboardUrls.overview(it)) } }) { Text("Dashboardを開く") } }
+            item { TextButton(enabled = settings.dashboardOrigin != null, onClick = { settings.dashboardOrigin?.let { openBrowser(DashboardUrls.privacy(it)) } }) { Text("全端末の記録停止・削除・export・公開設定") } }
         }
     }
 }

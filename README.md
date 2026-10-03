@@ -4,6 +4,8 @@ Wikipedia の読書記録を、自分の非公開履歴・統計へまとめる�
 
 読書状態は「閲覧」「途中まで読んだ」「読了」。表示された本文とアクティブ時間から推定するため、理解度の証明ではありません。手動設定では時間・推定文字数を増やしません。
 
+M0〜M10の機能を実装し、PostgreSQL・実Chrome・Android15エミュレータで閉じた検証を行っています。一般公開前に必要な実OAuth、HTTPS配備、物理実機、署名と継続利用の確認は [ST計画](docs/releases/ST-plan.md) に残しています。
+
 ## 構成と仕様
 
 | パス | 内容 |
@@ -53,9 +55,11 @@ Google/GitHubのOAuth登録、client ID/secret、接続先は運用者が設定�
 
 Android/拡張は外部ブラウザで端末名・確認コードを承認し、一回限りのgrantから専用tokenを取得します。端末tokenで管理操作はできません。削除・公開設定・identity管理にはWeb sessionとCSRF検証が必要です。
 
+AndroidのAPI接続先を変更すると端末連携とクラウド同意を解除します。再連携後に同意してください。旧Outboxは旧owner/deviceのまま保持し、新しい連携へ付け替えません。
+
 ローカル履歴、クラウド記録、公開は別の同意です。初期はクラウドOFF・プロフィール非公開。端末の一時停止で他端末を止めません。既存の未送信記録は送信/破棄を選べます。キー入力内容、検索途中の語、Wikipedia本文、Cookie、外部referrerは収集しません。
 
-再送は一回だけ計上し、複数端末の重複時間は和集合にします。記事削除は削除以前のsessionを拒否し、全消去はepochを更新して古いOutboxを拒否します。推定文字数は記事別session最大値を使い、再読ごとに増やしません。
+再送は一回だけ計上し、複数端末の重複時間は和集合にします。記事削除は許容する時計のずれも含めて旧sessionを拒否するため、同記事の記録再開まで最大5分待ちます。全消去はepochを更新して古いOutboxを直ちに拒否します。推定文字数は記事別session最大値を使い、再読ごとに増やしません。
 
 ## 検証とリリース境界
 
@@ -65,9 +69,14 @@ $env:TEST_DATABASE_URL=$env:DATABASE_URL
 .venv\Scripts\python.exe scripts/generate_contracts.py --check
 npm.cmd --prefix packages/tracker test
 npm.cmd --prefix apps/extension test
+npm.cmd --prefix apps/dashboard run test:unit
 npm.cmd --prefix apps/dashboard run build
+.venv\Scripts\python.exe scripts/verify_recovery.py
+.venv\Scripts\python.exe scripts/verify_performance.py
 ```
 
 PGテストは専用schemaを使用します。`TEST_DATABASE_URL`未設定時はSQLiteで実行し、PG並行処理をskipします。skipを確認済みには数えません。`scripts/local_smoke_server.py` は合成アカウントを使うローカル検証専用で、公開しません。
 
-M0〜M10の実装と閉じた検証を進めています。Google/GitHub実認証、HTTPS配備、最終署名・一般公開の設定は未準備です。ユーザーの指示により、用意できない実環境項目は後日のSTフェーズへ引き継ぎます。確認済み範囲と未実施項目、復旧・配布手順は `docs/releases/` に記録します。
+復旧・性能スクリプトは隔離DB/schemaを作成できるローカル検証権限を必要とします。既存DBの保持データを削除しません。Chromeの実デバッグ、Androidの正の時間/coverage/ACK、同ユーザーDashboard表示、実pg_dump/pg_restoreを確認しています。合成provider/記事metadataを使った確認を実OAuthの成功とは数えません。
+
+[検証結果・既知の制約](docs/releases/verification.md)、[70ケース受入台帳](docs/releases/acceptance-matrix.md)、[復旧・配布手順](docs/releases/operations.md) に結果を記録します。配布ビルドをcommitしたソースへ対応付けるには `python scripts/package_release.py` を実行します。出力は `dist/0.1.0-<commit>/` のdebug APK、拡張ZIP、Dashboard ZIP、SHA256付きmanifestです。

@@ -1,0 +1,25 @@
+{
+  "result": "pass",
+  "fixture": "synthetic",
+  "verified": [
+    "auth-required",
+    "manual-auto-state",
+    "csrf",
+    "article-delete-reload",
+    "privacy-consent-independent-switches",
+    "json-export",
+    "last-identity-protection",
+    "device-revoke-confirmation",
+    "explicit-device-approval",
+    "timezone-url-validation",
+    "public-schema-isolation",
+    "partial-error-retry",
+    "desktop-phone-no-overflow",
+    "all-history-delete-reload",
+    "dark-mode",
+    "account-delete-confirmation-logout",
+    "expired-session-reauthentication"
+  ],
+  "apiMutations": 10,
+  "browserErrors": 0
+}

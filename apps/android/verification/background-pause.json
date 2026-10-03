@@ -1,0 +1,9 @@
+{
+  "session_id": "922cc30d-8d61-4cad-b285-54f11fb905d9",
+  "action": "Android Home -> background",
+  "settle_seconds": 12,
+  "observation_seconds": 12,
+  "active_ms_before": 34989,
+  "active_ms_after": 34989,
+  "passed": true
+}
