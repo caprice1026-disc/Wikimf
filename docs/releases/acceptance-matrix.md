@@ -28,7 +28,7 @@
 | U1 | [smoke.mjs](../../apps/dashboard/scripts/smoke.mjs)、[dashboard-fixture.json](evidence/dashboard-fixture.json) | 実Chromeで合成APIの17 checks合格、browserErrors0。手動/削除/consent/public分離、CSRF、identity/device、390px/desktop、dark、401など。スマホ幅は実物理スマホではない。 |
 | U2 | [api-smoke.mjs](../../apps/dashboard/scripts/api-smoke.mjs)、[dashboard-postgres.json](evidence/dashboard-postgres.json)、[desktop画像](evidence/dashboard-desktop.png)、[mobile幅画像](evidence/dashboard-mobile.png) | 実HTTP/PGの14 checks合格、browser/serverErrors0。同ownerのAndroidとChrome双方に正の活動があり、source別表示件数がAPIと一致することを確認。snapshot時点の件数・時間はJSONに記録。隔離した合成QA userでcookie/CSRF、stats、filter、privacy、grant承認/exchange、revoke、390px。Google/GitHub実ログインは未実施。 |
 | P | [performance.json](evidence/performance.json) | Windows/PG17.6、1user/1article/500session・event・interval、warmup3、各endpoint30 requests。in-process HTTP TestClientでp95はresolver3.33、articles130.29、activities163.11、stats219.73ms。500ms目標をこの条件で満たした。TLS/WAN/実端末の負荷ではない。 |
-| I | [GitHub Actions run 37154241060](https://github.com/caprice1026-disc/Wikimf/actions/runs/37154241060) | source `c30f06dacc8b947f49f97852c06effbaac02aabb`のbackend/dashboard/tracker-extension/android全4jobがsuccess。PG・schema/migration、Dashboard unit/build、tracker/拡張unit/build、Android unit/build/lint。実browser/emulator instrumentation・実OAuthはこのCIの対象外。追加resolver修正後の最終SHA確認は別途必要。 |
+| I | [GitHub Actions run 37157922359](https://github.com/caprice1026-disc/Wikimf/actions/runs/37157922359)、[配布manifest](evidence/artifact-manifest.json) | source `51d3360da45459aabc61643d4cc74a164de0f556`のbackend/dashboard/tracker-extension/android全4jobがsuccess。PG75件・schema/migration、Dashboard unit/build、tracker/拡張unit/build、Android JVM10件/build/lint。実browser/emulator instrumentation・実OAuthはこのCIの対象外。debug APKと拡張/Dashboard ZIPのhash/build内容を固定済み。 |
 
 上記`evidence/`とAndroid`verification/`には匿名化したreport/画像を保存した。追加修正後の最終SHA/artifactとの対応はリリース記録で確認する。`.tmp/backend-smoke.json`などの資格情報ファイルは証跡へ添付しない。エミュレータ代替は今回のユーザー指示に基づく。物理Android、実provider資格情報、HTTPS配備先、release署名は後日STへ残す。
 
@@ -126,7 +126,7 @@
 
 | Gate | 現時点の判定 | 根拠と残件 |
 |---|---|---|
-| G00 | ローカル/remote CI確認、追加修正の最終artifact固定待ち | ADR/契約/schema/各buildと上記suite。Iのc30f06d全4job success。追加resolver修正後のSHA/build対応はST-13で更新、HTTPS/署名はST-03/04。 |
+| G00 | 閉じた検証の基盤・remote CI・artifact固定を確認 | ADR/契約/schema/各buildと上記suite。Iの最終配布source全4job success、3artifactのSHA256/build内容/共通tracker一致。HTTPS/署名の環境受入はST-03/04。 |
 | G01 | エミュレータ操作を一部確認 | A1のURL/bridge、A4の前後/fragment/Search往復/回転位置履歴/backgroundを確認。N04/N06～09/N12～14と文字サイズはST-05。物理実機未実施。 |
 | G02 | 一部確認 | 検索/履歴実装、SearchGate JVM・SQLite確認。実IME/429/画面順序はST-06。 |
 | G03 | 実provider未確認 | 実API端末grant・承認・exchangeとuser/scope/CSRF、認証9件は確認。実Google/GitHubログイン/identity追加はST-01/02。 |
@@ -136,7 +136,7 @@
 | G07 | 両host→同owner Dashboard経路を確認 | C1のworker停止/復帰、C2の実tracker→PG、A3/A4のnative実観測、U2の両source表示。identity/metadataは合成。実metadataの縦断一式はST-07。 |
 | G08 | 実PGの計算/並行性と限定性能を確認 | B1のunion/逆順/再読/日跨ぎ/replay/並列削除。Pの500session・local TestClient p95を確認。ST-07/09/12で実2host同時区間・DST・TLS/WAN/大量履歴を補う。 |
 | G09 | API/UI/復旧の確認あり、配備cache/端末ST残り | B1/B2、U1/U2、owner storage/epoch確認。両hostの停止/別account/旧queueと実HTTPS cacheはST-03/09/10。 |
-| G10 | リリース判定は保留 | 閉じた検証に向けた実装・ローカル確認。ユーザーの指示でエミュレータを先行し、実OAuth/HTTPS/署名/物理実機を後日STへ残す。ST-01～13と最終SHA/artifact対応・利用評価を完了して公開可否を別途判定。 |
+| G10 | 一般公開のリリース判定は保留 | 実装・閉じた検証・source/artifact固定は完了。ユーザーの指示でエミュレータを先行し、実OAuth/HTTPS/署名/物理実機を後日STへ残す。ST-01～13の実環境/利用評価を完了し、公開する配布対象のSHA/artifactを再照合して公開可否を別途判定。 |
 
 ## 実行結果を更新する条件
 

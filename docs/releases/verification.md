@@ -2,7 +2,7 @@
 
 2026-10-04。M0〜M10の機能を実装し、閉じたローカル検証を行った。実Google/GitHub、HTTPS配備、物理端末、release署名、継続利用を含めた一般公開のG10受入は保留する。ユーザーの指示でAndroid15エミュレータを先行し、未実施は [ST計画](ST-plan.md) と [70ケース受入台帳](acceptance-matrix.md) に残す。
 
-実装source checkpointは `c30f06dacc8b947f49f97852c06effbaac02aabb`。このSHAの[GitHub Actions](https://github.com/caprice1026-disc/Wikimf/actions/runs/37154241060)でBackend、tracker/extension、Dashboard、Androidの4jobが成功した。最終の追加検証・alias cache修正・配布source SHAは後段で固定する。
+配布sourceは `51d3360da45459aabc61643d4cc74a164de0f556`。[GitHub Actions](https://github.com/caprice1026-disc/Wikimf/actions/runs/37157922359)でBackend、tracker/extension、Dashboard、Androidの4jobが成功した。以後のREADME・検証記録の更新は配布sourceと分け、バイナリの対応を [manifest](evidence/artifact-manifest.json) へ固定した。
 
 ## 機能と実行済み確認
 
@@ -50,4 +50,12 @@ idle60秒、非focus、2秒超tick gapは時間を増やさない。長い静読
 
 ## 最終sourceとartifact
 
-最終のsource SHA、配布manifest、追加回帰、リモートCI、Issue状態は最終照合後にここへ記録する。artifact作成は `python scripts/package_release.py`、契約/schema/policyとSHA256を同じmanifestへ保存する。
+ソースがcleanな状態で `python scripts/package_release.py` を実行し、`dist/0.1.0-51d3360da454/` に3artifactを作成した。version 0.1.0、schema 1、measurement/server policy reading-v1、extractor prose-v1。SHA256、ZIP内容のbuild出力との一致、APK内の共通tracker assetの一致を確認した。一般公開用署名/接続先ではない。
+
+| Artifact | bytes | SHA256 |
+|---|---:|---|
+| wikimf-0.1.0-debug.apk | 10,308,405 | `ff44c1177a704138918b70734dedb474b4fe452c735a2f652e944a9f794b6a44` |
+| wikimf-0.1.0-extension.zip | 23,115 | `8dad21eaaf160a4ae8e772d4c20574eb544d8f877cada94970cbcd04de269795` |
+| wikimf-0.1.0-dashboard.zip | 101,763 | `8aca1b6e5a4d16b32d1d0bf387c0b094a95c298e52a4eaf610b6aa9195d9c13a` |
+
+実装Issue #1〜3/#5〜10は確認した層と未実施条件を記してcloseし、#4/#11/#12は実providerと公開受入の完了までopenを維持する。残るSTは [Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13) で追跡する。未実施のcheckboxは合格へ変更していない。

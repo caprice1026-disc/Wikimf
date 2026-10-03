@@ -4,7 +4,7 @@ Wikipedia の読書記録を、自分の非公開履歴・統計へまとめる�
 
 読書状態は「閲覧」「途中まで読んだ」「読了」。表示された本文とアクティブ時間から推定するため、理解度の証明ではありません。手動設定では時間・推定文字数を増やしません。
 
-M0〜M10の機能を実装し、PostgreSQL・実Chrome・Android15エミュレータで閉じた検証を行っています。一般公開前に必要な実OAuth、HTTPS配備、物理実機、署名と継続利用の確認は [ST計画](docs/releases/ST-plan.md) に残しています。
+M0〜M10の機能を実装し、PostgreSQL・実Chrome・Android15エミュレータで閉じた検証を完了しました。一般公開前に必要な実OAuth、HTTPS配備、物理実機、署名と継続利用の確認は [ST計画](docs/releases/ST-plan.md) と [Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13) に残しています。
 
 ## 構成と仕様
 

@@ -33,7 +33,7 @@ P0は閉じた検証の縦断確認と漏洩・二重計上・削除復活の防
 | ST-08/09 | 実Chrome worker stop/restart、tab arbitration、offline保存/個別ACK。最終strict schema2件accepted、10,001ms増。[chrome-postgres.json](evidence/chrome-postgres.json)。Android実offline2件→復旧0、累計81,821ms、非隔離。[offline-observation.json](../../apps/android/verification/offline-observation.json) | Android force-stop/reboot、ACK responseのみ紛失、queue容量/実disk障害、実複数window/OS focus、削除/re-link等。 |
 | ST-11 | 保持データ0002→0003 migration、実pg_dump/pg_restoreと最新safety適用の12 checks。[recovery.json](evidence/recovery.json) | migration失敗、検証配備先でのbackup運用/復旧時間とreplay照合。 |
 | ST-12 | local PG、500session/event/interval、warmup3、各30 requests、HTTP TestClientのp95最大219.73msで500ms目標をこの条件では満たした。[performance.json](evidence/performance.json) | TLS/WAN/並行負荷、物理端末電池/体感、静読/分割読書、一週間程度の利用評価。 |
-| ST-13 | `c30f06dacc8b947f49f97852c06effbaac02aabb`でbackend/dashboard/tracker-extension/androidの[remote CI全4job成功](https://github.com/caprice1026-disc/Wikimf/actions/runs/37154241060) | 追加resolver alias修正後の最終PG件数/対象SHAとartifact対応を固定。CIに実OAuth/実browser/emulator instrumentationは含まれない。 |
+| ST-13 | `51d3360da45459aabc61643d4cc74a164de0f556`で[remote CI全4job成功](https://github.com/caprice1026-disc/Wikimf/actions/runs/37157922359)。PG75/JVM10/Native4と[3artifactのmanifest](evidence/artifact-manifest.json)を固定 | 実環境のST結果を追加し、公開配布source/hashを再照合してG10を判定。CIに実OAuth/実browser/emulator instrumentationは含まれない。 |
 
 ## ST-01: provider登録
 
@@ -137,7 +137,7 @@ local PG/HTTP TestClientの500session条件では個人画面p95最大219.73ms�
 
 ## ST-13: 最終照合と終了条件
 
-`c30f06d`のremote CI全4jobは成功済み。追加resolver alias修正後の最終PG件数/対象SHAを固定し、関係するsuiteとartifact対応を確認する。契約生成差分、実PG suite、shared tracker/拡張suite、Dashboard build/fixture/real API、Android unit/lint/build/instrumentation、実Chrome suite、復旧は変更の影響に応じて最終対象で再実行する。provider/TLS/物理端末の未実施はskip理由とともに残す。CIのunit/build成功を実providerやbrowser/emulatorの確認へ広げない。
+配布source `51d3360`のremote CI全4jobは成功済み。PG75/JVM10/Native4、実Chrome、復旧12項目と3artifactのhash/build対応を固定した。後日のSTで修正があれば、契約生成差分、実PG suite、shared tracker/拡張suite、Dashboard build/fixture/real API、Android unit/lint/build/instrumentation、実Chrome suite、復旧を変更の影響に応じて再実行する。provider/TLS/物理端末の未実施はskip理由とともに残す。CIのunit/build成功を実providerやbrowser/emulatorの確認へ広げない。
 
 [受入台帳](acceptance-matrix.md)70行とG00～G10を結果で更新し、証跡が最終SHA/配布hashへ対応していることを照合する。重大な漏洩・二重計上・削除復活・検索/戻るの破綻は閉じた検証でも阻止条件。限定検証が可能な状態と、HTTPS/実OAuth/署名/物理端末を含めたリリース受入完了を分けて判定する。M11～M12のfeed/Neighbours/RaceはMVP-Aの残件に混ぜず別バックログにする。
 

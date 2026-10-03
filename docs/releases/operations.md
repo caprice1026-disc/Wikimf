@@ -4,7 +4,7 @@
 
 ## 配備と秘密情報
 
-Python 3.13 / PostgreSQL 17.6、Node 24（ローカルは22.14でも確認）、Android JDK17 / Gradle8.9 / SDK35を使用する。APIとDashboardは同じHTTPS originの `/api/v1` とSPAとして配備する。別originの場合は両方をHTTPSにし、`DASHBOARD_ORIGIN` をCORS許可元へ正確に設定する。Dashboardの直リンクは `index.html` へfallbackし、APIエラーをSPAへ転送しない。
+Python 3.13 / PostgreSQL 17.6、Node 24（ローカルは22.14でも確認）、Android JDK17 / Gradle8.9 / SDK35を使用する。APIとDashboardは同じHTTPS originの `/api/v1` とSPAとして配備する。Web CookieはSameSite=Laxなので、別originでも同じsite配下に置く。両方をHTTPSにし、`DASHBOARD_ORIGIN` をCORS許可元へ正確に設定する。Dashboardの直リンクは `index.html` へfallbackし、APIエラーをSPAへ転送しない。
 
 `.env.example` をもとに運用者が `ENVIRONMENT=production`、`API_ORIGIN`、`DASHBOARD_ORIGIN`、独立した十分長い `SESSION_SECRET`、DBパスワード、Google/GitHub client ID/secretを用意する。値はGit・Issue・配布物へ含めない。provider callbackは `/api/v1/auth/{provider}/callback`。DashboardのAPIは同originなら既定 `/api/v1`、別originならbuild時の `VITE_API_BASE_URL` で指定する。拡張は `WIKIMF_API_ORIGIN` と `WIKIMF_DASHBOARD_ORIGIN` を指定して再buildする。AndroidのAccountでHTTPS API URLを設定する。
 
