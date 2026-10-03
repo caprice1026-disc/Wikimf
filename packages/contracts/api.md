@@ -8,6 +8,8 @@ POST `/device-links`: `{source:"android_reader"|"chrome_extension",display_name}
 
 GET `/me/recording-control`: `{user_id,device_id,recording_epoch,collection_enabled,deletion_markers:[{article_id,deleted_before}]}`.
 
+Article-history deletion sets `deleted_before` to server time plus the accepted five-minute clock-skew allowance. Clients discard sessions starting on/before this cutoff. Recording that article can resume after the cutoff; the conservative delay prevents a clock-ahead old Outbox from resurrecting deletion. Full-history deletion advances the recording epoch immediately.
+
 POST `/articles/resolve`: `{url}` OR `{wiki,page_id}` → public Article. Article: `{article_id,wiki,page_id,language,title,canonical_url,namespace,trackable,untrackable_reason,metadata_status,resolved_at,availability,latest_revision_id}`. GET `/articles/{id}`, `/wikis/{wiki}/pages/{page_id}` same shape. POST `/articles/batch-get` `{article_ids:[uuid]}` → `{items:[Article]}`.
 
 POST `/reading-events/batch`: exact detailed-design §15.3 `{schema_version:1,events:[…]}`. Item `schema_version` optional 1; `time_only` document fingerprint/text_chars null, chunk_chars empty; progress covered_chunk_ids empty, reason_code required. Empty intervals allowed for opened and closed, observed must positive. ACK `{results:[{event_id,status:"accepted"|"duplicate"|"rejected"|"quarantined",code,retryable:false}],recording_epoch,server_time}`. Item rejection does not remove unrelated accepted events. Whole-request auth/size failures have error envelope. Retries use same event IDs/payloads.
@@ -19,6 +21,8 @@ GET `/me/stats?from=…&to=…&wiki=…&timezone=…`: `{library:{recorded_artic
 GET `/me/achievements` → `{items:[{id,name,description,earned,progress,target}]}`. GET `/me/devices` → `{items:[{device_id,display_name,source,created_at,expires_at,last_used_at,revoked}]}`. DELETE `/me/devices/{id}` revokes.
 
 GET `/me/identities` → `{items:[{provider,linked_at}]}`. POST `/me/identities/{provider}/link` returns `{authorization_url}`. DELETE refuses last identity. GET `/auth/{provider}/start` redirects to provider; callback redirects Dashboard `/home`. POST `/auth/logout` removes Web session.
+
+Each user has one identity per provider. Explicit linking a different subject for an already connected provider returns HTTP409 `provider_already_linked`; same-identity callbacks remain idempotent. `identity_already_linked` rejects a subject already belonging to another user. Unlink removes that provider's identities and refuses removal of the last remaining provider.
 
 GET/PATCH `/me/privacy`: `{collection_enabled,consent_version,profile_public,publish_total_time,publish_achievements,timezone,display_name}`. Collection defaults false, profile defaults private. PATCH allows any of these fields, cloud opt-in requires consent_version `privacy-v1`. GET `/profiles/{user_id}` anonymous → `{user_id,display_name,active_ms:null|number,achievements:null|[earned items]}`; HTTP404 if private. No article/history data.
 

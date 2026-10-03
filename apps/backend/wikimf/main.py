@@ -276,6 +276,9 @@ def create_app(database_url=None, mediawiki=None):
         user,_,_ = authenticate(request,db,web_only=True)
         if provider not in ("google","github") or not oauth.create_client(provider):
             raise APIError("provider_not_configured",503)
+        user = lock_user(db,user.id)
+        if db.scalar(select(Identity).where(Identity.user_id == user.id,Identity.provider == provider)):
+            raise APIError("provider_already_linked",409)
         nonce = token()
         request.session["link_intent"] = {"user_id":user.id,"provider":provider,"nonce":nonce,"created_at":time.time()}
         return {"authorization_url":api_origin+PREFIX+f"/auth/{provider}/start?link="+nonce}
@@ -285,12 +288,13 @@ def create_app(database_url=None, mediawiki=None):
         user,_,_ = authenticate(request,db,web_only=True)
         lock_user(db,user.id)
         items = list(db.scalars(select(Identity).where(Identity.user_id == user.id)))
-        identity = next((i for i in items if i.provider == provider),None)
-        if not identity:
+        matches = [i for i in items if i.provider == provider]
+        if not matches:
             raise APIError("identity_not_found",404)
-        if len(items)<=1:
+        if len(matches)==len(items):
             raise APIError("last_identity",409)
-        db.delete(identity)
+        for identity in matches:
+            db.delete(identity)
         db.commit()
         return {"unlinked":True}
 
@@ -326,7 +330,7 @@ def create_app(database_url=None, mediawiki=None):
     @app.get(PREFIX+"/wikis/{wiki}/pages/{page_id}")
     def get_page(wiki:str,page_id:int,request: Request,db=Depends(db_session)):
         throttle(request,"resolve",60)
-        if wiki not in ("jawiki","enwiki") or page_id<=0:
+        if wiki not in ("jawiki","enwiki") or not 0<page_id<=2147483647:
             raise APIError("invalid_article_identifier")
         return resolve(db,app.state.mediawiki,ResolveInput(wiki=wiki,page_id=page_id))
 
@@ -475,7 +479,9 @@ def create_app(database_url=None, mediawiki=None):
         if not marker:
             marker = DeletionMarker(user_id=user.id,article_id=article.id)
             db.add(marker)
-        marker.deleted_before = now()
+        # Cover every pre-delete observation accepted within the clock-skew window.
+        from .ingest import CLOCK_SKEW
+        marker.deleted_before = now()+CLOCK_SKEW
         db.commit()
         return {"deleted":True,"recording_epoch":user.recording_epoch}
 

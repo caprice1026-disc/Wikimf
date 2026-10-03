@@ -10,6 +10,8 @@ from .db import Article, DeletionMarker, Device, ReadingEvent, ReadingInterval, 
 from .projection import contradictory
 from .articles import APIError
 
+CLOCK_SKEW = timedelta(minutes=5)
+
 
 def lock_user(db, user_id):
     # PostgreSQL row locks coordinate ingestion, privacy changes, deletion and revocation.
@@ -41,7 +43,7 @@ def accept_batch(db, user, device, batch):
             if not user.collection_enabled:
                 raise APIError("collection_disabled")
             at = now()
-            if e.occurred_at > at+timedelta(minutes=5) or e.session_started_at > at+timedelta(minutes=5) or e.occurred_at < at-timedelta(days=7) or e.session_started_at < at-timedelta(days=7):
+            if e.occurred_at > at+CLOCK_SKEW or e.session_started_at > at+CLOCK_SKEW or e.occurred_at < at-timedelta(days=7) or e.session_started_at < at-timedelta(days=7):
                 raise APIError("invalid_event_time")
             article = db.get(Article,str(e.article_id))
             if not article or article.wiki != e.wiki or article.page_id != e.page_id:
@@ -83,7 +85,7 @@ def accept_batch(db, user, device, batch):
                     session.quarantined = True
                 result["status"] = "quarantined" if session.quarantined else "accepted"
                 result["code"] = "session_quarantined" if session.quarantined else None
-        except ValidationError:
+        except (ValidationError,UnicodeError):
             result["code"] = "invalid_event"
         except APIError as exc:
             result["code"] = exc.code

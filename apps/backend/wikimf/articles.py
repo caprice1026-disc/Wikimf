@@ -26,7 +26,9 @@ def parse_article_url(url):
             raise APIError("invalid_article_url")
         if parts.netloc.lower() not in (parts.hostname, parts.hostname + ":443"):
             raise APIError("invalid_article_url")
-        query = parse_qs(parts.query, keep_blank_values=True, strict_parsing=False)
+        query = parse_qs(parts.query, keep_blank_values=True, strict_parsing=False, errors="strict")
+        if any(re.search(r"[\x00-\x1f\x7f]", value) for key,values in query.items() for value in [key,*values]):
+            raise APIError("invalid_article_url")
         if any(len(values) != 1 for values in query.values()):
             raise APIError("ambiguous_article_identifier")
         # Viewing mode is an independent tracking gate, regardless of namespace.
@@ -35,6 +37,8 @@ def parse_article_url(url):
             raise APIError("unsupported_article_mode")
         if parts.path.startswith("/wiki/"):
             title = unquote(parts.path[6:], errors="strict").replace("_", " ")
+            if re.search(r"[\x00-\x1f\x7f]", title):
+                raise APIError("invalid_article_url")
             if not title or "title" in query or "curid" in query:
                 raise APIError("ambiguous_article_identifier")
             return HOSTS[parts.hostname], {"titles": title}

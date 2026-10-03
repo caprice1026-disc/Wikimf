@@ -29,14 +29,20 @@ def issue_web_session(db, user_id):
 
 
 def identify(db, provider, subject, display_name, link_user_id=None):
+    linked_user = None
+    if link_user_id:
+        # Serialize explicit links before checking the provider's existing identity.
+        linked_user = db.scalar(select(User).where(User.id == link_user_id).with_for_update().execution_options(populate_existing=True))
+        if linked_user is None:
+            raise APIError("authentication_required", 401)
     identity = db.scalar(select(Identity).where(Identity.provider == provider, Identity.subject == subject))
     if identity:
         if link_user_id and identity.user_id != link_user_id:
             raise APIError("identity_already_linked", 409)
         return db.get(User, identity.user_id)
-    user = db.get(User, link_user_id) if link_user_id else User(display_name=display_name[:100] or "Reader")
-    if user is None:
-        raise APIError("authentication_required", 401)
+    if linked_user and db.scalar(select(Identity).where(Identity.user_id == linked_user.id, Identity.provider == provider)):
+        raise APIError("provider_already_linked", 409)
+    user = linked_user if linked_user else User(display_name=display_name[:100] or "Reader")
     db.add(user)
     db.flush()
     db.add(Identity(user_id=user.id, provider=provider, subject=subject))

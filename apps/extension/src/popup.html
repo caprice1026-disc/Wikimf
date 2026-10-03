@@ -1,0 +1,8 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>wikimf</title><link rel="stylesheet" href="popup.css">
+<body><main><h1>wikimf</h1><p>Wikipedia の読書記録</p><p id="status" role="status">確認中…</p><p id="article"></p>
+<p id="counts"></p><p id="pairing"></p><button id="pair">アカウントと連携</button>
+<label><input id="recording" type="checkbox">この端末で記録する</label>
+<label><input id="sendQueued" type="checkbox" checked>停止中も保存済みの記録を同期する</label>
+<p class="note">画面表示と操作から読む時間と範囲を推定します。理解度を確認するものではありません。非公開が初期設定です。</p>
+<button id="sync">今すぐ同期</button><button id="discard">保存済みの未送信記録を破棄</button><button id="logout">同期して連携解除</button><button id="logoutDiscard">未送信を破棄して連携解除</button>
+<a id="dashboard" target="_blank" rel="noopener">Dashboard を開く</a><p id="error" role="alert"></p></main><script type="module" src="popup.js"></script></body></html>

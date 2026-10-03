@@ -1,0 +1,1 @@
+{"name":"@wikimf/tracker","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node --test --experimental-test-isolation=none test/*.test.js","build":"node build.js"}}

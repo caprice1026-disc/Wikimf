@@ -8,26 +8,32 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"apps/backend"))
 from sqlalchemy import delete,select
-from wikimf.db import DeletionMarker,Device,DeviceLink,Identity,ManualState,ReadingEvent,ReadingSession,User,WebSession,database,now,utc
+from wikimf.db import Article,DeletionMarker,Device,DeviceLink,Identity,ManualState,ReadingEvent,ReadingSession,User,WebSession,database,now,utc
 from wikimf.ingest import lock_user
 from wikimf.projection import replay,stats
 
 
 def safety_manifest(db):
-    return {"format_version":1,"captured_at":now().isoformat(),"users":[{"user_id":u.id,"recording_epoch":u.recording_epoch} for u in db.scalars(select(User))],
+    return {"format_version":2,"captured_at":now().isoformat(),"users":[{"user_id":u.id,"recording_epoch":u.recording_epoch} for u in db.scalars(select(User))],
+            "identity_ids":[i.id for i in db.scalars(select(Identity))],
             "deletion_markers":[{"user_id":m.user_id,"article_id":m.article_id,"deleted_before":utc(m.deleted_before).isoformat()} for m in db.scalars(select(DeletionMarker))],
             "manual_states":[{"user_id":m.user_id,"article_id":m.article_id,"state":m.state,"updated_at":utc(m.updated_at).isoformat()} for m in db.scalars(select(ManualState))]}
 
 
 def apply_safety(db,manifest):
-    if manifest.get("format_version")!=1:
+    if manifest.get("format_version")!=2:
         raise ValueError("unsupported safety manifest")
     users = {u["user_id"]:u for u in manifest["users"]}
+    identity_ids = set(manifest["identity_ids"])
     # Used only with API/clients stopped. All restored credentials are revoked.
     db.execute(delete(WebSession))
     db.execute(delete(DeviceLink))
     for device in db.scalars(select(Device)):
         device.revoked_at = now()
+    # Unlinked provider accounts must not regain access from an older backup.
+    for identity in list(db.scalars(select(Identity))):
+        if identity.id not in identity_ids:
+            db.delete(identity)
     for user in list(db.scalars(select(User))):
         lock_user(db,user.id)
         if user.id not in users:
@@ -43,7 +49,7 @@ def apply_safety(db,manifest):
         user.collection_enabled = False
         user.profile_public = False
     for marker in manifest["deletion_markers"]:
-        if not db.get(User,marker["user_id"]):
+        if not db.get(User,marker["user_id"]) or not db.get(Article,marker["article_id"]):
             continue
         # Conservative restore removes all backed-up records for deleted articles.
         for model in (ReadingEvent,ReadingSession,ManualState):
@@ -58,7 +64,7 @@ def apply_safety(db,manifest):
     # Exact current manual states prevent resurrecting a removed self-report.
     db.execute(delete(ManualState))
     for item in manifest["manual_states"]:
-        if db.get(User,item["user_id"]):
+        if db.get(User,item["user_id"]) and db.get(Article,item["article_id"]):
             from datetime import datetime
             db.add(ManualState(user_id=item["user_id"],article_id=item["article_id"],state=item["state"],updated_at=datetime.fromisoformat(item["updated_at"])))
     db.commit()

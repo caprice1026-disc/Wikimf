@@ -1,4 +1,5 @@
 import copy
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from uuid import uuid4
@@ -20,6 +21,8 @@ from wikimf.projection import infer,replay,stats,subtract,union
     "https://ja.wikipedia.org/wiki/Foo?title=Bar","https://ja.wikipedia.org/wiki/%zz",
     "https://ja.wikipedia.org/w/index.php?title=Foo&curid=1","https://ja.wikipedia.org/w/index.php?curid=-1",
     "https://ja.wikipedia.org/w/index.php?title=A&title=B","https://ja.wikipedia.org\\evil/wiki/Foo",
+    "https://ja.wikipedia.org/w/index.php?title=%ff","https://ja.wikipedia.org/w/index.php?title=Foo%00",
+    "https://ja.wikipedia.org/wiki/Foo%0a",
 ])
 def test_url_security(url):
     with pytest.raises(APIError):
@@ -52,6 +55,7 @@ def test_health_resolver_public_metadata(env):
     assert a["wiki"] == "enwiki" and a["page_id"] == 202
     assert "user_id" not in a and "state" not in a
     assert client.get("/api/v1/wikis/enwiki/pages/202").json()["article_id"] == a["article_id"]
+    assert client.get("/api/v1/wikis/enwiki/pages/2147483648").status_code == 400
     assert client.post("/api/v1/articles/resolve",json={"url":"https://en.wikipedia.org/wiki/Missing"}).status_code == 404
 
 
@@ -82,6 +86,25 @@ def test_item_ack_does_not_discard_good_event(env):
     good = observation(ids)
     ack = send(client,ids,bad,good).json()["results"]
     assert [x["status"] for x in ack] == ["rejected","accepted"]
+
+
+def test_invalid_unicode_item_does_not_poison_good_event(env):
+    app,client,ids = env
+    bad,good = observation(ids),observation(ids)
+    bad["client_version"] = "broken-\ud800"
+    response = client.post("/api/v1/reading-events/batch",headers={"Authorization":"Bearer "+ids["token"],"Content-Type":"application/json"},
+                           content=json.dumps({"schema_version":1,"events":[bad,good]},ensure_ascii=True).encode("ascii"))
+    assert response.status_code == 200
+    assert [(x["status"],x["code"]) for x in response.json()["results"]] == [("rejected","invalid_event"),("accepted",None)]
+
+
+def test_article_deletion_blocks_clock_skewed_old_outbox(env):
+    app,client,ids = env
+    event = observation(ids,start=now()+timedelta(minutes=1),seconds=10)
+    assert send(client,ids,event).json()["results"][0]["status"] == "accepted"
+    assert client.delete("/api/v1/me/articles/"+ids["article_id"]+"/history",headers=web_headers(ids)).status_code == 200
+    assert send(client,ids,event).json()["results"][0]["code"] == "history_deleted"
+    assert client.get("/api/v1/me/articles").json()["items"] == []
 
 
 def test_missing_intervals_reverse_order_quarantine(env):

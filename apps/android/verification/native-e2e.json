@@ -1,0 +1,120 @@
+{
+  "verified_at": "2026-10-03T21:09:38.142463+00:00",
+  "environment": {
+    "android_api": 35,
+    "webview": "124.0.6367.219",
+    "backend": "FastAPI + PostgreSQL 17.6",
+    "identity": "Synthetic test provider via real device approval exchange",
+    "article_resolution": "Synthetic MediaWiki metadata; real Wikipedia page DOM",
+    "real_content_url": "https://en.wikipedia.org/wiki/Earth"
+  },
+  "native_activities": [
+    {
+      "session_id": "59e827a4-ae35-4738-a50f-4ed04782ff1e",
+      "source": "android_reader",
+      "active_ms": 44980,
+      "coverage": 0.012409257305950239,
+      "measurement_status": "ok",
+      "quarantined": false,
+      "effective_state": null,
+      "state": "partial"
+    },
+    {
+      "session_id": "24f0f5d5-8979-4afe-b188-b8f66d34f895",
+      "source": "android_reader",
+      "active_ms": 21992,
+      "coverage": 0.012409257305950239,
+      "measurement_status": "ok",
+      "quarantined": false,
+      "effective_state": null,
+      "state": "viewed"
+    },
+    {
+      "session_id": "f16ad24f-96c3-4118-8826-55cb78e30b96",
+      "source": "android_reader",
+      "active_ms": 21991,
+      "coverage": 0.004136419101983413,
+      "measurement_status": "ok",
+      "quarantined": false,
+      "effective_state": null,
+      "state": "viewed"
+    },
+    {
+      "session_id": "deebdc0a-13a9-40f1-bf53-a3eb2ede3342",
+      "source": "android_reader",
+      "active_ms": 120629,
+      "coverage": 0.012409257305950239,
+      "measurement_status": "ok",
+      "quarantined": false,
+      "effective_state": null,
+      "state": "partial"
+    }
+  ],
+  "owner_stats": {
+    "library": {
+      "recorded_article_count": 2,
+      "qualified_article_count": 2,
+      "state_counts": {
+        "viewed": 0,
+        "partial": 2,
+        "completed": 0
+      },
+      "completed_inferred_count": 0,
+      "completed_self_reported_count": 0
+    },
+    "activity": {
+      "activity_count": 8,
+      "qualified_article_count": 2,
+      "active_ms": 269679,
+      "estimated_unique_read_chars": 900
+    },
+    "by_wiki": {
+      "jawiki": {
+        "activity_count": 4,
+        "active_ms": 60087,
+        "estimated_unique_read_chars": 300
+      },
+      "enwiki": {
+        "activity_count": 4,
+        "active_ms": 209592,
+        "estimated_unique_read_chars": 600
+      }
+    },
+    "daily": [
+      {
+        "date": "2026-10-04",
+        "active_ms": 269679,
+        "estimated_unique_read_chars": 900
+      }
+    ],
+    "pending_recalculation": false,
+    "as_of": "2026-10-03T21:09:40.191859+00:00",
+    "timezone": "Asia/Tokyo"
+  },
+  "account_pause": {
+    "session_id": "59e827a4-ae35-4738-a50f-4ed04782ff1e",
+    "screen": "Account",
+    "settle_seconds": 12,
+    "observation_seconds": 12,
+    "active_ms_before": 44980,
+    "active_ms_after": 44980,
+    "passed": true
+  },
+  "native_outbox": {
+    "rows": 0,
+    "quarantined": 0,
+    "pending_article": 0
+  },
+  "artifacts": [
+    {
+      "path": "apps/android/app/build/outputs/apk/debug/app-debug.apk",
+      "bytes": 10308405,
+      "sha256": "4ca42fb64bf69acbd9423c16f9516f462923585a1d8271c6571f66ed9320afae"
+    },
+    {
+      "path": "apps/android/app/build/outputs/apk/release/app-release-unsigned.apk",
+      "bytes": 7339322,
+      "sha256": "c77b188b04495bbcd8ad7dee391a27bed646f74d38d47fc635085b245a1979b2"
+    }
+  ]
+}

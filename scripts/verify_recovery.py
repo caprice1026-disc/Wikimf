@@ -15,7 +15,7 @@ from sqlalchemy import create_engine,select,text
 from conftest import FixtureWiki,observation,send,web_headers
 from scripts.backend_ops import apply_safety,safety_manifest
 from wikimf.auth import digest,identify,issue_web_session,token
-from wikimf.db import Article,Device,ReadingEvent,User,WebSession,now
+from wikimf.db import Article,Device,Identity,ManualState,ReadingEvent,User,WebSession,now
 from wikimf.main import create_app
 from wikimf.projection import replay
 from datetime import timedelta
@@ -57,6 +57,8 @@ def main():
             db.add(article);db.flush()
             for i in range(3):
                 user=identify(db,"google","recovery-"+str(i),"Recovery fixture")
+                if i==0:
+                    identify(db,"github","recovery-github","Recovery fixture",user.id)
                 user.collection_enabled,user.consent_version=True,"privacy-v1"
                 secret,web=issue_web_session(db,user.id)
                 device_secret=token()
@@ -76,6 +78,15 @@ def main():
                 path="/api/v1/me/articles/"+ids["article_id"]+"/history" if index==0 else "/api/v1/me" if index==1 else "/api/v1/me/history"
                 result=client.request("DELETE",path,headers=web_headers(ids),json={"confirmation":"DELETE"} if index==1 else None)
                 assert result.status_code==200
+            # Unlink after backup, and create new article references absent from it.
+            with app.state.sessions() as db:
+                extra=Article(wiki="enwiki",page_id=999,title="Post-backup article",canonical_url="https://en.wikipedia.org/wiki/New",namespace=0,trackable=True)
+                db.add(extra);db.commit();extra_id=extra.id
+            ids=credentials[0];client.cookies.set("wikimf_session",ids["web_secret"])
+            assert client.delete("/api/v1/me/identities/google",headers=web_headers(ids)).status_code==200
+            assert client.delete("/api/v1/me/articles/"+extra_id+"/history",headers=web_headers(ids)).status_code==200
+            ids=credentials[2];client.cookies.set("wikimf_session",ids["web_secret"])
+            assert client.put("/api/v1/me/articles/"+extra_id+"/state",headers=web_headers(ids),json={"state":"completed"}).status_code==200
         with app.state.sessions() as db:
             ledger=safety_manifest(db)
         pg("pg_restore","--exit-on-error","-d",target,str(archive))
@@ -86,6 +97,8 @@ def main():
             assert db.get(User,credentials[1]["user_id"]) is None
             assert not list(db.scalars(select(ReadingEvent)))
             assert not list(db.scalars(select(WebSession)))
+            assert not list(db.scalars(select(ManualState)))
+            assert [i.provider for i in db.scalars(select(Identity).where(Identity.user_id==credentials[0]["user_id"]))]==["github"]
             for ids in (credentials[0],credentials[2]):
                 assert not replay(db,ids["user_id"])["records"]
                 assert not db.get(User,ids["user_id"]).collection_enabled
@@ -93,7 +106,7 @@ def main():
         with TestClient(restored) as client:
             for ids in credentials:
                 assert send(client,ids,observation(ids)).status_code==401
-        report={"result":"pass","database":"PostgreSQL17.6","checks":["empty-migration-upgrade-downgrade-upgrade","actual-pg-dump-restore","article-deletion-not-resurrected","account-deletion-not-resurrected","epoch-all-history-not-resurrected","all-old-device-tokens-refused","all-web-sessions-revoked","manual-states-not-resurrected","collection-and-publication-disabled"]}
+        report={"result":"pass","database":"PostgreSQL17.6","checks":["empty-migration-upgrade-downgrade-upgrade","actual-pg-dump-restore","article-deletion-not-resurrected","account-deletion-not-resurrected","epoch-all-history-not-resurrected","all-old-device-tokens-refused","all-web-sessions-revoked","manual-states-not-resurrected","collection-and-publication-disabled","unlinked-identity-not-restored","missing-post-backup-article-safe"]}
         (evidence/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
         print(json.dumps(report))
     finally:
