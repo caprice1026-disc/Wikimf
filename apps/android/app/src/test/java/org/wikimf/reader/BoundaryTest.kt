@@ -14,6 +14,9 @@ class BoundaryTest {
         assertTrue(UrlPolicy.measurable("https://en.wikipedia.org/wiki/Example#History"))
         assertTrue(UrlPolicy.measurable("https://en.wikipedia.org/w/index.php?curid=123"))
         for (url in listOf("https://en.wikipedia.org/wiki/Main_Page", "https://ja.wikipedia.org/wiki/メインページ", "https://en.wikipedia.org/wiki/Special:Search", "https://en.wikipedia.org/wiki/Example?oldid=10", "https://en.wikipedia.org/wiki/Example?action=edit", "https://en.wikipedia.org/w/index.php?curid=-1")) assertFalse(url, UrlPolicy.measurable(url))
+        assertEquals("https://ja.wikipedia.org/wiki/地球", UrlPolicy.initialUrl("https://ja.wikipedia.org/wiki/地球", "enwiki"))
+        assertEquals("https://en.wikipedia.org/wiki/Main_Page", UrlPolicy.initialUrl("", "enwiki"))
+        assertEquals("https://ja.wikipedia.org/wiki/メインページ", UrlPolicy.initialUrl("https://untrusted.example/", "jawiki"))
     }
     @Test fun onlyTrustedMainFrameAndBoundOwnerCanReachQueue() {
         assertTrue(SecurityPolicy.acceptsBridge("https://ja.wikipedia.org", true, 100, "https://ja.wikipedia.org/wiki/X"))
@@ -53,6 +56,15 @@ class BoundaryTest {
         assertFalse(guard.accepts(event, now + 1000))
         event.getJSONObject("interval").put("active_spans_ms", JSONArray("[[0,1000]]"))
         assertTrue(guard.accepts(event, now + 1000))
+        val boundary = opened().put("type", "reading.observed").put("seq", 2).put("occurred_at", "2026-10-04T00:01:00Z")
+        boundary.getJSONObject("interval").put("end_at", "2026-10-04T00:01:00Z")
+        assertTrue("The API permits a 60,000 ms interval", guard.accepts(boundary, now + 60_000))
+        boundary.put("seq", 3).put("occurred_at", "2026-10-04T00:01:00.001Z")
+        boundary.getJSONObject("interval").put("end_at", "2026-10-04T00:01:00.001Z")
+        assertFalse("Overlong intervals must never reach the durable queue", guard.accepts(boundary, now + 60_001))
+        boundary.put("type", "session.closed").put("reason", "pause").put("occurred_at", "2026-10-04T00:01:00Z")
+        boundary.getJSONObject("interval").put("start_at", "2026-10-04T00:01:00Z").put("end_at", "2026-10-04T00:01:00Z")
+        assertTrue("An empty closing interval is valid", guard.accepts(boundary, now + 60_000))
         assertTrue(SecurityPolicy.nextBackoff(100) <= 900_000)
     }
 }

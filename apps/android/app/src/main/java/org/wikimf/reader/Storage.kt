@@ -136,6 +136,7 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "wikimf.sqlite", 
     }
     fun queueBytes(): Long = readableDatabase.rawQuery("SELECT COALESCE(SUM(length(CAST(payload AS BLOB))),0) FROM outbox", null).use { it.moveToFirst(); it.getLong(0) }
     fun count(owner: String): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox WHERE owner=?", arrayOf(owner)).use { it.moveToFirst(); it.getInt(0) }
+    fun pending(device: LinkedDevice): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox WHERE owner=? AND device=?", arrayOf(device.userId, device.deviceId)).use { it.moveToFirst(); it.getInt(0) }
     fun quarantined(owner: String): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM diagnostics WHERE owner=?", arrayOf(owner)).use { it.moveToFirst(); it.getInt(0) }
     fun rows(device: LinkedDevice): List<QueueRow> = readableDatabase.rawQuery("SELECT id,owner,device,payload,pending_url,attempt FROM outbox WHERE owner=? AND device=? AND next_try<=? ORDER BY created, rowid LIMIT 50", arrayOf(device.userId, device.deviceId, System.currentTimeMillis().toString())).use { cursor ->
         buildList { while (cursor.moveToNext()) add(QueueRow(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3), if (cursor.isNull(4)) null else cursor.getString(4), cursor.getInt(5))) }

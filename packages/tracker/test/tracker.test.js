@@ -1,12 +1,54 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { POLICY, articleLocation, codepointCount, chunkSizes, excludedElement, visibleRatio, viewportChunks, inferState, ReadingSession } from '../tracker.js';
+import { POLICY, articleLocation, codepointCount, chunkSizes, excludedElement, visibleRatio, viewportChunks, inferState, ReadingSession, DOMTracker } from '../tracker.js';
 const time = Date.UTC(2026,9,4,0);
 const uuid = () => crypto.randomUUID();
 function session(overrides = {}) {
   return new ReadingSession({ article: { article_id: uuid(), wiki: 'jawiki', page_id: 1 }, deviceId: uuid(),
     source: 'chrome_extension', epoch: 1, now: time, mono: 0,
     document: { fingerprint: 'a'.repeat(64), extractor_version: POLICY.extractor, observed_revision_id: null, text_chars: 400, chunk_chars: [200,200] }, ...overrides });
+}
+function suspendedTracker(run) {
+  const clock = { mono: 0, active: true }, events = [], originalNow = Date.now;
+  const originalPerformance = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+  Date.now = () => time + (clock.wall ?? clock.mono);
+  Object.defineProperty(globalThis, 'performance', { configurable: true, value: { now: () => clock.mono } });
+  try {
+    const doc = { visibilityState: 'visible', hasFocus: () => true, removeEventListener() {},
+      defaultView: { innerWidth: 100, innerHeight: 100, scrollY: 0, removeEventListener() {} },
+      documentElement: { scrollHeight: 1000 } };
+    const tracker = new DOMTracker({ doc, host: { active: () => clock.active, persist: event => events.push(event) } });
+    tracker.session = session({ source: 'android_reader' }); tracker.extracted = { chunks: [] };
+    tracker.enabled = true; tracker.wasActive = true; tracker.lastSave = 0;
+    events.push(tracker.session.event('session.opened'));
+    run({ tracker, clock, events });
+  } finally {
+    Date.now = originalNow;
+    Object.defineProperty(globalThis, 'performance', originalPerformance);
+  }
+}
+function assertIntervals(events) {
+  let total = 0, priorEnd = time;
+  for (const [seq, event] of events.entries()) {
+    const start = Date.parse(event.interval.start_at), end = Date.parse(event.interval.end_at);
+    assert.equal(event.seq, seq); assert.equal(event.session_id, events[0].session_id);
+    assert.ok(start >= priorEnd); assert.ok(end - start >= 0 && end - start <= 60000, `seq ${seq} interval is ${end - start} ms`);
+    if (event.type === 'reading.observed') assert.ok(end > start);
+    let spanEnd = 0, active = 0;
+    for (const [from, to] of event.interval.active_spans_ms) {
+      assert.ok(from >= spanEnd && to > from && to <= end - start);
+      active += to - from; spanEnd = to;
+    }
+    assert.equal(event.progress.active_ms_total - total, active, 'adjacent seq preserves cumulative active accounting');
+    total = event.progress.active_ms_total; priorEnd = end;
+  }
+}
+function recordThreeSeconds(tracker) {
+  for (let i = 1; i <= 3; i++) tracker.session.tick({ now: time + i * 1000, mono: i * 1000, active: true, ratios: [1, 0] });
+}
+function resumeOneSecond(tracker, clock) {
+  clock.active = true; clock.mono = 102000; tracker.tick();
+  clock.mono = 103000; tracker.tick(); tracker.flush();
 }
 test('URL boundary excludes credentials, lookalikes, old revisions, and fragments do not change article identity', () => {
   assert.deepEqual(articleLocation('https://ja.wikipedia.org/wiki/A_B#Section'), { wiki: 'jawiki', title: 'A B' });
@@ -74,4 +116,74 @@ test('native session ID and fallback reason follow shared event contract without
   const id=uuid(), reading=session({sessionId:id,document:{fingerprint:null,extractor_version:'prose-v1',observed_revision_id:null,text_chars:null,chunk_chars:[],measurement_reason:'body_empty'}});
   const opened=reading.event('session.opened'); assert.equal(opened.session_id,id); assert.equal(opened.progress.reason_code,'body_empty');
   assert.equal('measurement_reason' in opened.document,false); assert.equal('text' in opened.document,false);
+});
+
+test('a saved prefix followed by a 98-second empty pause never creates an oversized event or credits the pause', () => {
+  suspendedTracker(({ tracker, clock, events }) => {
+    recordThreeSeconds(tracker); tracker.flush(); const saved = JSON.stringify(events);
+    clock.mono = 101000; clock.active = false; tracker.wasActive = false; tracker.tick();
+    assertIntervals(events); assert.equal(events.length, 2); assert.equal(tracker.session.activeMs, 3000);
+    assert.equal(tracker.session.intervalStart, time + 101000);
+    resumeOneSecond(tracker, clock); assertIntervals(events);
+    assert.equal(events.at(-1).progress.active_ms_total, 4000);
+    assert.deepEqual(events.at(-1).interval.active_spans_ms, [[1000, 2000]]);
+    assert.equal(JSON.stringify(events.slice(0, 2)), saved);
+  });
+});
+
+test('an unsaved active prefix survives a 98-second pause and keeps coverage, cumulative time, and seq', () => {
+  suspendedTracker(({ tracker, clock, events }) => {
+    recordThreeSeconds(tracker);
+    clock.mono = 101000; clock.active = false; tracker.wasActive = false; tracker.tick();
+    assertIntervals(events); assert.equal(events.length, 2);
+    assert.deepEqual(events[1].interval.active_spans_ms, [[0, 3000]]);
+    assert.deepEqual(events[1].progress.covered_chunk_ids, [0]);
+    assert.equal(events[1].progress.active_ms_total, 3000);
+    const saved = JSON.stringify(events[1]);
+    resumeOneSecond(tracker, clock); assertIntervals(events);
+    assert.equal(events.at(-1).progress.active_ms_total, 4000);
+    assert.deepEqual(events.at(-1).progress.covered_chunk_ids, [0]);
+    assert.equal(JSON.stringify(events[1]), saved);
+  });
+});
+
+test('stopping after a 98-second suspension preserves pending spans before a zero-length close', () => {
+  suspendedTracker(({ tracker, clock, events }) => {
+    recordThreeSeconds(tracker); clock.mono = 101000; tracker.stop('pause');
+    assertIntervals(events); assert.equal(events.length, 3);
+    assert.deepEqual(events[1].interval.active_spans_ms, [[0, 3000]]);
+    assert.equal(events[1].progress.active_ms_total, 3000);
+    const closed = events[2]; assert.equal(closed.type, 'session.closed'); assert.equal(closed.reason, 'pause');
+    assert.equal(closed.interval.start_at, closed.interval.end_at);
+    assert.deepEqual(closed.interval.active_spans_ms, []); assert.equal(closed.progress.active_ms_total, 3000);
+    assert.deepEqual(closed.progress.covered_chunk_ids, [0]); assert.equal(tracker.session, null);
+  });
+});
+
+test('a full 60-second pending interval is saved before the next continuous active sample', () => {
+  suspendedTracker(({ tracker, clock, events }) => {
+    for (let i = 1; i <= 60; i++) tracker.session.tick({ now: time + i * 1000, mono: i * 1000, active: true, ratios: [1, 0] });
+    tracker.session.interact(60000); clock.mono = 61000; tracker.tick();
+    assertIntervals(events); assert.equal(events.length, 3);
+    assert.deepEqual(events[1].interval.active_spans_ms, [[0, 60000]]);
+    assert.deepEqual(events[2].interval.active_spans_ms, [[0, 1000]]);
+    assert.equal(events[2].progress.active_ms_total, 61000);
+  });
+});
+
+test('a skipped wall-clock gap cannot credit a sample before the new interval begins', () => {
+  suspendedTracker(({ tracker, clock, events }) => {
+    for (let i = 1; i <= 59; i++) tracker.session.tick({ now: time + i * 1000, mono: i * 1000, active: true, ratios: [1, 0] });
+    tracker.session.tick({ now: time + 59900, mono: 59900, active: true, ratios: [1, 0] });
+    tracker.session.interact(59900); tracker.lastSave = 59900;
+    clock.wall = 62500; clock.mono = 60900; tracker.tick();
+    assert.equal(tracker.session.clockChanged, false, 'the existing 2-second clock tolerance still applies');
+    assert.equal(tracker.session.activeMs, 59900, 'the skipped gap contributes no active time');
+    assert.deepEqual(tracker.session.spans, []);
+    clock.wall = 63500; clock.mono = 61900; tracker.tick(); tracker.flush();
+    assertIntervals(events); assert.equal(events.length, 3);
+    assert.deepEqual(events[1].interval.active_spans_ms, [[0, 59900]]);
+    assert.deepEqual(events[2].interval.active_spans_ms, [[0, 1000]]);
+    assert.equal(events[2].progress.active_ms_total, 60900);
+  });
 });

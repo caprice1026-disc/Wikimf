@@ -133,7 +133,7 @@ export class ReadingSession {
     const delta = mono - this.lastMono, wallDelta = now - this.lastWall;
     if (delta < 0 || Math.abs(wallDelta - delta) > 2000) this.clockChanged = true;
     const recent = this.lastMono - this.lastInteraction < POLICY.idleMs;
-    const accepted = active && recent && delta > 0 && delta <= POLICY.maxTickMs && !this.clockChanged ?
+    const accepted = active && recent && this.lastWall >= this.intervalStart && delta > 0 && delta <= POLICY.maxTickMs && !this.clockChanged ?
       Math.floor(Math.min(delta, Math.max(0, wallDelta), Math.max(0, this.lastInteraction + POLICY.idleMs - this.lastMono))) : 0;
     if (accepted) {
       const start = Math.max(0, this.lastWall - this.intervalStart), end = start + accepted;
@@ -155,7 +155,7 @@ export class ReadingSession {
   }
   event(type, now = this.lastWall, reason) {
     if (this.closed) return null;
-    if (type !== 'session.opened' && now <= this.intervalStart) return null;
+    if (type !== 'session.opened' && (now < this.intervalStart || (type === 'reading.observed' && now === this.intervalStart))) return null;
     const event = { event_id: this.uuid(), type, device_id: this.deviceId, session_id: this.id,
       session_started_at: new Date(this.startedAt).toISOString(), seq: this.seq++, source: this.source,
       article_id: this.article.article_id, wiki: this.article.wiki, page_id: this.article.page_id,
@@ -212,10 +212,11 @@ export class DOMTracker {
   }
   tick() {
     if (!this.session) return;
-    const win = this.doc.defaultView, mono = performance.now();
+    const win = this.doc.defaultView, mono = performance.now(), now = Date.now();
+    this.flushBeforeIntervalLimit(now);
     const active = this.enabled && this.doc.visibilityState === 'visible' && this.doc.hasFocus() && this.host.active();
     if (active && !this.wasActive) {
-      this.session.lastWall = Date.now(); this.session.lastMono = mono; this.session.interact(mono);
+      this.session.lastWall = now; this.session.lastMono = mono; this.session.interact(mono);
     }
     this.wasActive = active;
     const ratios = Array(this.extracted.chunks.length).fill(0);
@@ -223,10 +224,17 @@ export class DOMTracker {
       for (const chunk of viewportChunks(this.byBlock.get(block) || [], win.innerHeight))
         ratios[chunk.id] = visibleRatio(chunk.range.getClientRects(), win.innerWidth, win.innerHeight);
     }
-    this.session.tick({ now: Date.now(), mono, active, ratios,
+    this.session.tick({ now, mono, active, ratios,
       scrollRatio: win.scrollY / Math.max(1, this.doc.documentElement.scrollHeight - win.innerHeight) });
     if (this.session.clockChanged) { this.stop('clock_changed'); this.host.restart?.(); return; }
     if (mono - this.lastSave >= POLICY.saveMs) { this.lastSave = mono; this.flush(); }
+  }
+  flushBeforeIntervalLimit(now) {
+    if (!this.session || now - this.session.intervalStart <= 60000) return;
+    // Persist the sampled prefix before moving past an unobserved suspension.
+    const last = this.session.lastWall, event = this.session.event('reading.observed', last);
+    if (event) this.host.persist(event);
+    if (now - last > POLICY.maxTickMs) this.session.intervalStart = now;
   }
   flush() { const event = this.session?.event('reading.observed'); if (event) return this.host.persist(event); }
   stop(reason = 'pause') {
@@ -237,7 +245,8 @@ export class DOMTracker {
       this.doc.removeEventListener('visibilitychange', this.visibility);
       this.doc.defaultView.removeEventListener('blur', this.visibility); this.doc.defaultView.removeEventListener('focus', this.visibility);
     }
-    const event = this.session?.event('session.closed', Date.now(), reason);
+    const now = Date.now(); this.flushBeforeIntervalLimit(now);
+    const event = this.session?.event('session.closed', now, reason);
     this.enabled = false; this.session = null;
     if (event) return this.host.persist(event);
   }

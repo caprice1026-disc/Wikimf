@@ -32,6 +32,8 @@ object UrlPolicy {
         currentId || (uri.path.startsWith("/wiki/") && !(title.contains(':') && namespace in excluded) && title !in setOf("Main_Page", "メインページ", ""))
     }.getOrDefault(false)
     fun articleUrl(wiki: String, key: String): String = "https://${if (wiki == "jawiki") "ja" else "en"}.wikipedia.org/wiki/" + URLEncoder.encode(key.replace(' ', '_'), "UTF-8").replace("+", "%20")
+    fun initialUrl(current: String, wiki: String): String = current.takeIf { classify(it) == Destination.READER }
+        ?: if (wiki == "jawiki") "https://ja.wikipedia.org/wiki/メインページ" else "https://en.wikipedia.org/wiki/Main_Page"
 }
 
 data class SearchRequest(val language: String, val query: String, val full: Boolean, val generation: Long)

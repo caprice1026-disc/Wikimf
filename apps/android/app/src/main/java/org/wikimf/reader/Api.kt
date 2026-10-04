@@ -118,31 +118,48 @@ class SyncEngine(private val context: Context) {
         val store = LocalStore(context)
         val api = Api(settings)
         try {
-            val markers = api.recordingControl(store, device)
-            if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件を端末で保持"; return@withContext true }
-            val rows = store.rows(device)
-            val ready = mutableListOf<Pair<QueueRow, JSONObject>>()
-            var size = 0
-            for (row in rows) {
-                if (!SecurityPolicy.canSend(row.owner, row.device, device.userId, device.deviceId)) continue
-                var event = JSONObject(row.payload)
-                if (row.pendingUrl != null) {
-                    val article = api.request("/articles/resolve", JSONObject().put("url", row.pendingUrl), device)
-                    if (!article.getBoolean("trackable")) { store.quarantine(row.id, "untrackable_article"); continue }
-                    event.put("article_id", article.getString("article_id")).put("wiki", article.getString("wiki")).put("page_id", article.getLong("page_id"))
-                    store.finalizePending(row.id, event)
+            repeat(20) {
+                val markers = api.recordingControl(store, device)
+                if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件を端末で保持"; return@withContext true }
+                val pendingBefore = store.pending(device)
+                val rows = store.rows(device)
+                val ready = mutableListOf<Pair<QueueRow, JSONObject>>()
+                var size = 0
+                for (row in rows) {
+                    if (!SecurityPolicy.canSend(row.owner, row.device, device.userId, device.deviceId)) continue
+                    var event = JSONObject(row.payload)
+                    if (row.pendingUrl != null) {
+                        val article = try { api.request("/articles/resolve", JSONObject().put("url", row.pendingUrl), device) }
+                        catch (failure: ApiFailure) {
+                            val terminal = (failure.code == 404 && failure.errorCode == "article_not_found") ||
+                                (failure.code in setOf(400, 422) && failure.errorCode in setOf("invalid_article_url", "unsupported_article_mode", "ambiguous_article_identifier", "invalid_page_id", "unsupported_article_url", "invalid_article_identifier"))
+                            if (!terminal) throw failure
+                            store.quarantine(row.id, failure.errorCode)
+                            continue
+                        }
+                        if (!article.getBoolean("trackable")) { store.quarantine(row.id, "untrackable_article"); continue }
+                        event.put("article_id", article.getString("article_id")).put("wiki", article.getString("wiki")).put("page_id", article.getLong("page_id"))
+                        store.finalizePending(row.id, event)
+                    }
+                    if (store.deleted(event, markers)) { store.quarantine(row.id, "article_deleted"); continue }
+                    val bytes = event.toString().toByteArray().size
+                    if (size + bytes > 240 * 1024) break
+                    size += bytes
+                    ready.add(row to event)
                 }
-                if (store.deleted(event, markers)) { store.quarantine(row.id, "article_deleted"); continue }
-                val bytes = event.toString().toByteArray().size
-                if (size + bytes > 240 * 1024) break
-                size += bytes
-                ready.add(row to event)
+                if (ready.isEmpty()) {
+                    settings.status = if (store.quarantined(device.userId) > 0) "隔離された記録 ${store.quarantined(device.userId)}件" else if (store.count(device.userId) > 0) "再送を待っています" else "同期済み"
+                    if (settings.cloudConsent && settings.serverEnabled && store.pending(device) in 1 until pendingBefore) return@repeat
+                    return@withContext !settings.cloudConsent || !settings.serverEnabled || store.pending(device) == 0
+                }
+                if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件"; return@withContext true }
+                submit(api, store, device, ready)
+                settings.status = "未送信 ${store.count(device.userId)}件・隔離 ${store.quarantined(device.userId)}件"
+                val pendingAfter = store.pending(device)
+                if (pendingAfter == 0) return@withContext true
+                if (pendingAfter >= pendingBefore) return@withContext false
             }
-            if (ready.isEmpty()) { settings.status = if (store.quarantined(device.userId) > 0) "隔離された記録 ${store.quarantined(device.userId)}件" else if (store.count(device.userId) > 0) "再送を待っています" else "同期済み"; return@withContext !settings.cloudConsent || !settings.serverEnabled || store.count(device.userId) == 0 }
-            if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件"; return@withContext true }
-            submit(api, store, device, ready)
-            settings.status = "未送信 ${store.count(device.userId)}件・隔離 ${store.quarantined(device.userId)}件"
-            true
+            false
         } catch (failure: Exception) {
             if (failure is kotlinx.coroutines.CancellationException) throw failure
             if (failure is ApiFailure && failure.errorCode == "recording_disabled") { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件を端末で保持"; return@withContext true }

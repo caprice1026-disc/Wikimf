@@ -23,9 +23,12 @@ class DashboardLinkIntegrationTest {
         assumeTrue(InstrumentationRegistry.getArguments().getString("native_dashboard_smoke") == "true")
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val settings = Settings(instrumentation.targetContext)
-        assertEquals("http://10.0.2.2:8000/api/v1", settings.apiUrl)
+        val arguments = InstrumentationRegistry.getArguments()
+        val expectedApi = arguments.getString("dashboard_api_url") ?: "http://10.0.2.2:8000/api/v1"
+        val expectedOrigin = arguments.getString("dashboard_origin") ?: "http://10.0.2.2:5173"
+        assertEquals(expectedApi, settings.apiUrl)
         Api(settings).refreshDashboardOrigin()
-        assertEquals("http://10.0.2.2:5173", settings.dashboardOrigin)
+        assertEquals(expectedOrigin, settings.dashboardOrigin)
         val intents = LinkedBlockingQueue<String>()
         val monitor = object : Instrumentation.ActivityMonitor() {
             override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? {
@@ -49,7 +52,7 @@ class DashboardLinkIntegrationTest {
             fun matches(node: AccessibilityNodeInfo, text: String): List<AccessibilityNodeInfo> {
                 if (node.className == "android.webkit.WebView") return emptyList()
                 val found = mutableListOf<AccessibilityNodeInfo>()
-                if (node.text?.toString() == text) found.add(node)
+                if (node.isVisibleToUser && node.text?.toString() == text) found.add(node)
                 for (i in 0 until node.childCount) node.getChild(i)?.let { found.addAll(matches(it, text)) }
                 return found
             }
@@ -69,14 +72,23 @@ class DashboardLinkIntegrationTest {
                 }
                 fail("Could not click $text")
             }
-            click("Account")
+            // A finished Reader Activity can leave stale virtual nodes during the next transition.
+            instrumentation.waitForIdleSync()
+            val accountDeadline = SystemClock.elapsedRealtime() + 10_000
+            do {
+                click("Account")
+                Thread.sleep(300)
+                val root = instrumentation.uiAutomation.rootInActiveWindow
+                if (root != null && matches(root, "端末内の記事履歴を保存").isNotEmpty()) break
+                assertTrue("Account content did not appear", SystemClock.elapsedRealtime() < accountDeadline)
+            } while (true)
             click("Dashboardを開く")
             val overview = intents.poll(3, TimeUnit.SECONDS)
-            assertEquals("http://10.0.2.2:5173/app", overview)
+            assertEquals("$expectedOrigin/app", overview)
             println("Captured ACTION_VIEW $overview")
             click("全端末の記録停止・削除・export・公開設定")
             val privacy = intents.poll(3, TimeUnit.SECONDS)
-            assertEquals("http://10.0.2.2:5173/app/settings/privacy", privacy)
+            assertEquals("$expectedOrigin/app/settings/privacy", privacy)
             println("Captured ACTION_VIEW $privacy")
         } finally {
             instrumentation.removeMonitor(monitor)

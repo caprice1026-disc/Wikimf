@@ -154,6 +154,79 @@ class PrivacyRegressionTest {
             }
         } finally { settings.unlink(); settings.apiUrl = originalApi }
     }
+
+    @Test fun workerRetriesCurrentDeviceUntilAllBatchesAndPartialAcknowledgementsDrain() = runBlocking {
+        val settings = Settings(context)
+        val originalApi = settings.apiUrl
+        try {
+            for (mode in listOf("row_limit", "byte_limit", "bounded_run", "retry_last", "omit_last", "old_device")) {
+                context.deleteDatabase("wikimf.sqlite")
+                RecordingServer(device, articleId).use { server ->
+                    settings.apiUrl = "http://127.0.0.1:${server.port}/api/v1"
+                    settings.saveDevice(device); settings.cloudConsent = true; settings.serverEnabled = true
+                    server.ackMode = mode
+                    LocalStore(context).use { store ->
+                        val bound = if (mode == "old_device") device.copy(deviceId = "old-phone") else device
+                        repeat(if (mode == "row_limit") 60 else if (mode == "byte_limit") 6 else if (mode == "bounded_run") 1001 else 2) {
+                            val value = event().put("session_started_at", "2026-03-01T00:00:00Z")
+                            if (mode == "byte_limit") value.put("private_reading_payload", "x".repeat(50_000))
+                            assertTrue(store.enqueue(bound, value, null))
+                        }
+                    }
+                    val drained = mode in setOf("row_limit", "byte_limit", "old_device")
+                    assertEquals("Successful batches drain without backoff; retries are bounded: $mode", drained, SyncEngine(context).sync())
+                    LocalStore(context).use { store ->
+                        if (mode == "old_device") {
+                            assertEquals(0, store.pending(device)); assertEquals(2, store.count(device.userId))
+                        } else {
+                            assertEquals(if (drained) 0 else 1, store.pending(device))
+                            if (mode == "bounded_run") assertEquals(20, server.requests.count { it.first.endsWith("/reading-events/batch") })
+                            if (mode in listOf("retry_last", "omit_last")) {
+                                assertTrue("Partial ACK schedules a future row", store.rows(device).isEmpty())
+                                assertFalse("Future next_try must still request Worker retry", SyncEngine(context).sync())
+                                assertEquals(1, server.requests.count { it.first.endsWith("/reading-events/batch") })
+                            }
+                            store.writableDatabase.execSQL("UPDATE outbox SET next_try=0")
+                        }
+                    }
+                    server.ackMode = "all"
+                    assertTrue(SyncEngine(context).sync())
+                    LocalStore(context).use { assertEquals(0, it.pending(device)) }
+                    server.failure.get()?.let { throw AssertionError("Fixture HTTP server failed", it) }
+                    println("Worker $mode: current-device pending rows determine retry; old-device rows preserved")
+                }
+            }
+        } finally { settings.unlink(); settings.apiUrl = originalApi }
+    }
+
+    @Test fun terminalPendingResolutionDoesNotBlockOtherRowsAndUnknownErrorsRetainPayload() = runBlocking {
+        val settings = Settings(context)
+        val originalApi = settings.apiUrl
+        try {
+            for ((index, scenario) in listOf(Triple(404, "article_not_found", true), Triple(400, "invalid_article_url", true), Triple(422, "invalid_article_identifier", true), Triple(404, "unknown_gateway", false), Triple(404, "invalid_server_response", false), Triple(503, "wikipedia_unavailable", false), Triple(404, "article_not_found", true)).withIndex()) {
+                val (status, code, terminal) = scenario
+                val pendingCount = if (index == 6) 50 else 1
+                context.deleteDatabase("wikimf.sqlite")
+                RecordingServer(device, articleId).use { server ->
+                    settings.apiUrl = "http://127.0.0.1:${server.port}/api/v1"
+                    settings.saveDevice(device); settings.cloudConsent = true; settings.serverEnabled = true
+                    server.resolveStatus = status; server.resolveCode = code
+                    LocalStore(context).use { store ->
+                        repeat(pendingCount) { assertTrue(store.enqueue(device, event(), "https://en.wikipedia.org/wiki/Missing")) }
+                        assertTrue(store.enqueue(device, event(), null))
+                    }
+                    assertEquals(terminal, SyncEngine(context).sync())
+                    assertEquals(if (terminal) 1 else 0, server.requests.count { it.first.endsWith("/reading-events/batch") })
+                    LocalStore(context).use { store ->
+                        assertEquals(if (terminal) 0 else 2, store.pending(device))
+                        assertEquals(if (terminal) pendingCount else 0, store.quarantined(device.userId))
+                    }
+                    server.failure.get()?.let { throw AssertionError("Fixture HTTP server failed", it) }
+                    println("Pending resolve $status/$code: terminal=$terminal; unknown/transient payload retained")
+                }
+            }
+        } finally { settings.unlink(); settings.apiUrl = originalApi }
+    }
 }
 
 /** A real loopback HTTP server on the emulator, with no extra test dependency. */
@@ -164,6 +237,9 @@ private class RecordingServer(private val device: LinkedDevice, private val arti
     val failure = AtomicReference<Throwable?>()
     @Volatile var collection = true
     @Volatile var controlStatus = 200
+    @Volatile var ackMode = "all"
+    @Volatile var resolveStatus = 200
+    @Volatile var resolveCode = "article_not_found"
     @Volatile var beforeControlResponse: (() -> Unit)? = null
     private val thread = Thread {
         try {
@@ -183,15 +259,24 @@ private class RecordingServer(private val device: LinkedDevice, private val arti
                 while (offset < length) { val count = input.read(bodyBytes, offset, length - offset); require(count > 0); offset += count }
                 val body = bodyBytes.toString(Charsets.UTF_8)
                 requests.add(path to body)
-                val status = if (path == "/api/v1/me/recording-control") controlStatus else 200
-                val response = (if (status != 200) JSONObject().put("error", JSONObject().put("code", "control_unavailable")) else when (path) {
+                val status = when (path) { "/api/v1/me/recording-control" -> controlStatus; "/api/v1/articles/resolve" -> resolveStatus; else -> 200 }
+                val response = (if (status != 200) JSONObject().put("error", JSONObject().put("code", if (path.endsWith("/articles/resolve")) resolveCode else "control_unavailable")) else when (path) {
                     "/api/v1/me/recording-control" -> {
                         beforeControlResponse?.invoke()
                         JSONObject().put("user_id", device.userId).put("device_id", device.deviceId).put("recording_epoch", 2).put("collection_enabled", collection)
                             .put("deletion_markers", JSONArray().put(JSONObject().put("article_id", articleId).put("deleted_before", "2026-02-01T00:00:00Z")))
                     }
                     "/api/v1/articles/resolve" -> JSONObject().put("article_id", articleId).put("wiki", "enwiki").put("page_id", 101).put("trackable", true)
-                    "/api/v1/reading-events/batch" -> JSONObject().put("results", JSONArray().put(JSONObject().put("event_id", JSONObject(body).getJSONArray("events").getJSONObject(0).getString("event_id")).put("status", "accepted")))
+                    "/api/v1/reading-events/batch" -> {
+                        val events = JSONObject(body).getJSONArray("events")
+                        val results = JSONArray()
+                        for (i in 0 until events.length()) {
+                            if (ackMode == "omit_last" && i == events.length() - 1) continue
+                            val retry = ackMode == "retry_last" && i == events.length() - 1
+                            results.put(JSONObject().put("event_id", events.getJSONObject(i).getString("event_id")).put("status", if (retry) "rejected" else "accepted").put("retryable", retry))
+                        }
+                        JSONObject().put("results", results)
+                    }
                     else -> error("Unexpected fixture HTTP path $path")
                 }).toString().toByteArray()
                 socket.getOutputStream().apply {

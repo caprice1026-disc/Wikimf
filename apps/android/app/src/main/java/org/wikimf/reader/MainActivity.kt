@@ -359,7 +359,7 @@ private class ReaderController(
                     (result.obj as WebView.WebViewTransport).webView = child; result.sendToTarget(); return true
                 }
             }
-            if (state == null || restoreState(state) == null) loadUrl(if (this@ReaderController.settings.language == "jawiki") "https://ja.wikipedia.org/wiki/メインページ" else "https://en.wikipedia.org/wiki/Main_Page")
+            if (state == null || restoreState(state) == null) loadUrl(UrlPolicy.initialUrl(this@ReaderController.url, this@ReaderController.settings.language))
         }
     }
     private fun history(view: WebView) { canBack = view.canGoBack(); canForward = view.canGoForward(); changed() }

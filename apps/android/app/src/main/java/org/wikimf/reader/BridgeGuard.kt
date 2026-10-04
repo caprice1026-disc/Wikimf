@@ -40,7 +40,7 @@ class BridgeGuard {
         if (total > 1_000_000 || (!doc.isNull("text_chars") && total != doc.getLong("text_chars"))) return false
         val interval = event.getJSONObject("interval")
         val duration = Instant.parse(interval.getString("end_at")).toEpochMilli() - Instant.parse(interval.getString("start_at")).toEpochMilli()
-        if (duration < 0 || (event.getString("type") == "reading.observed" && duration == 0L)) return false
+        if (duration < 0 || duration > 60_000 || (event.getString("type") == "reading.observed" && duration == 0L)) return false
         var end = 0L
         val spans = interval.getJSONArray("active_spans_ms")
         for (i in 0 until spans.length()) {
