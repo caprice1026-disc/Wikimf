@@ -1,9 +1,11 @@
 import { Outbox, trustedContent, trustedPage, focusedTab, validateObservation } from './outbox.js';
 import { API_ORIGIN, DASHBOARD_ORIGIN, CLIENT_VERSION } from './config.js';
 import { articleLocation } from './tracker-module.js';
+import { isQueueProblem, recordingBlocked, nextSyncCode, recoveredQueueCode } from './sync-state.js';
 const api = chrome, storage = api.storage.local, outbox = new Outbox(storage);
 let syncing = null, retryAt = 0, failures = 0;
 let pairingPoll = null;
+let statusTail = Promise.resolve();
 const bindings = new Map();
 const ready = Promise.all([storage.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }),api.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })]);
 const owner = async () => (await storage.get('credentials')).credentials;
@@ -18,17 +20,29 @@ async function notifyStop() {
   const tabs = await api.tabs.query({ url: ['https://ja.wikipedia.org/*', 'https://en.wikipedia.org/*'] });
   await Promise.allSettled(tabs.map(tab => api.tabs.sendMessage(tab.id, { type: 'tracking.stop' }, { frameId: 0 })));
 }
-async function setProblem(code) { await storage.set({ syncStatus: { code, at: Date.now() } }); }
+function updateSyncStatus(transition) {
+  const result = statusTail.then(async () => {
+    const current = (await storage.get('syncStatus')).syncStatus?.code || 'idle';
+    const code = await transition(current);
+    if (code !== current) await storage.set({ syncStatus: { code, at: Date.now() } });
+    return code !== current;
+  });
+  statusTail = result.catch(() => {}); return result;
+}
+const setProblem = code => updateSyncStatus(current => nextSyncCode(current, code));
+const recoverQueueProblem = () => updateSyncStatus(async current =>
+  isQueueProblem(current) ? recoveredQueueCode(current, await outbox.canAcceptObservation()) : current);
 async function control(auth) {
   const response = await request('/me/recording-control', { auth });
   if (!response.ok) throw new Error(response.status === 401 ? 'reauth_required' : response.status === 403 ? 'device_revoked' : 'control_unavailable');
   const result = await response.json();
   if (result.user_id !== auth.user_id || result.device_id !== auth.device_id) throw new Error('owner_mismatch');
   await outbox.applyControl(auth, result);
+  const recovered = await recoverQueueProblem();
   const previous = (await storage.get('control')).control;
   await storage.set({ control: result });
-  if (previous && (previous.recording_epoch !== result.recording_epoch ||
-      JSON.stringify(previous.deletion_markers) !== JSON.stringify(result.deletion_markers))) await notifyStop();
+  if (recovered || (previous && (previous.recording_epoch !== result.recording_epoch ||
+      JSON.stringify(previous.deletion_markers) !== JSON.stringify(result.deletion_markers)))) await notifyStop();
   if (!result.collection_enabled) await notifyStop();
   return result;
 }
@@ -46,7 +60,8 @@ async function sendBatch(auth, events) {
       const midpoint = Math.ceil(events.length / 2);
       await sendBatch(auth, events.slice(0, midpoint)); await sendBatch(auth, events.slice(midpoint)); return;
     }
-    await outbox.applyAck(auth, { results: [{ event_id: events[0].event_id, status: 'rejected', code: 'event_too_large' }] }, new Set(events.map(event => event.event_id))); return;
+    await outbox.applyAck(auth, { results: [{ event_id: events[0].event_id, status: 'rejected', code: 'event_too_large' }] }, new Set(events.map(event => event.event_id)));
+    if (await recoverQueueProblem()) await notifyStop(); return;
   }
   if (response.status === 401 || response.status === 403) {
     await setProblem(response.status === 401 ? 'reauth_required' : 'device_revoked'); await notifyStop(); return;
@@ -58,7 +73,9 @@ async function sendBatch(auth, events) {
   if (!response.ok) { await scheduleRetry(response); throw new Error('retry_pending'); }
   const result = await response.json();
   await outbox.applyAck(auth, result, new Set(events.map(event => event.event_id)));
-  failures = 0; retryAt = 0; await storage.set({ retryAt: 0, retryState: { failures: 0 }, syncStatus: { code: 'synced', at: Date.now() } });
+  failures = 0; retryAt = 0; await storage.set({ retryAt: 0, retryState: { failures: 0 } });
+  if (await recoverQueueProblem()) await notifyStop();
+  await setProblem('synced');
   if (result.recording_epoch !== auth.recording_epoch) await control(auth);
 }
 async function sync(force = false) {
@@ -116,10 +133,13 @@ async function pollPairing() {
   }
   const auth = await response.json();
   await storage.set({ credentials: auth, settings: { recording: false, sendQueued: true }, control: null });
+  // Completing an explicit new device link is the user's terminal-error recovery action.
+  await updateSyncStatus(() => 'idle');
   await storage.remove('pairing'); return { pending: false, linked: true };
 }
 async function status() {
-  const auth = await owner(), state = await outbox.read(), options = await settings(), stored = await storage.get(['syncStatus', 'pairing']);
+  const auth = await owner(), state = await outbox.read(), options = await settings(), stored = await storage.get(['syncStatus', 'pairing', 'control']);
+  const code = stored.syncStatus?.code || 'idle';
   let currentArticle = null;
   const tab = await focusedTab(api);
   const binding = tab ? (await api.storage.session.get('binding:' + tab.id))['binding:' + tab.id] : null;
@@ -134,8 +154,9 @@ async function status() {
     } catch { /* The persisted queue status is available even when article metadata is offline. */ }
   }
   return { linked: !!auth, display_name: auth?.display_name, recording: options.recording,
+    recording_enabled: !!auth && options.recording && !recordingBlocked(code) && stored.control?.collection_enabled !== false,
     queued: state.rows.filter(row => row.owner.user_id === auth?.user_id && row.owner.device_id === auth?.device_id).length,
-    rejected: state.quarantine.length, discarded: state.lossCount, sync: stored.syncStatus?.code || 'idle',
+    rejected: state.quarantine.length, discarded: state.lossCount, sync: code,
     current_article: currentArticle,
     pairing: stored.pairing ? { user_code: stored.pairing.user_code, expires_at: stored.pairing.expires_at } : null, dashboard_url: DASHBOARD_ORIGIN };
 }
@@ -145,7 +166,7 @@ async function contentMessage(message, sender) {
   if (message.type === 'lease') {
     const tab = await focusedTab(api);
     const remote = (await storage.get('control')).control;
-    const denied = ['reauth_required', 'device_revoked', 'owner_mismatch', 'queue_full', 'queue_expired', 'schema_mismatch'].includes((await storage.get('syncStatus')).syncStatus?.code);
+    const denied = recordingBlocked((await storage.get('syncStatus')).syncStatus?.code);
     return { enabled: !denied && remote?.collection_enabled !== false && tab?.id === sender.tab.id,
       lease_until: Date.now() + 15000 };
   }
@@ -193,7 +214,9 @@ async function pageMessage(message) {
       await notifyStop(); if (message.sendQueued || message.enabled) void sync(true); return status();
     }
     case 'sync': await sync(true); return status();
-    case 'discard': if (auth) await outbox.discard(auth); return status();
+    case 'discard':
+      if (auth) { await outbox.discard(auth); if (await recoverQueueProblem()) await notifyStop(); }
+      return status();
     case 'logout': {
       if (!auth) return status();
       const pending = (await outbox.batch(auth)).length;

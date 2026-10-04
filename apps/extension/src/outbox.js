@@ -1,9 +1,19 @@
 export const QUEUE_LIMIT = 8 * 1024 * 1024; // Leave space under chrome.storage.local's 10 MiB quota.
 export const QUEUE_AGE_MS = 7 * 86400000;
+export const MAX_OBSERVATION_BYTES = 65536;
 export class Outbox {
   constructor(storage, now = Date.now) { this.storage = storage; this.now = now; this.tail = Promise.resolve(); }
   serial(operation) { const result = this.tail.then(operation); this.tail = result.catch(() => {}); return result; }
   read() { return this.storage.get('outbox').then(state => state.outbox || { rows: [], quarantine: [], lossCount: 0 }); }
+  canAcceptObservation() {
+    return this.serial(async () => {
+      const state = await this.read();
+      // Reserve one maximum-sized observation plus its UUID owner/timestamp wrapper.
+      // Foreign-owner rows also consume the storage quota and must not be discarded here.
+      return !state.rows.some(row => this.now() - row.created_at > QUEUE_AGE_MS) &&
+        new TextEncoder().encode(JSON.stringify(state)).length + MAX_OBSERVATION_BYTES + 200 <= QUEUE_LIMIT;
+    });
+  }
   enqueue(owner, event) {
     return this.serial(async () => {
       const state = await this.read();
@@ -110,5 +120,5 @@ export function validateObservation(event) {
   } else if (progress.measurement_status === 'time_only') {
     if (document.fingerprint !== null || document.text_chars !== null || document.chunk_chars.length || progress.covered_chunk_ids.length || !['body_not_found','body_empty','body_limit'].includes(progress.reason_code)) return false;
   } else return false;
-  return new TextEncoder().encode(JSON.stringify(event)).length <= 65536;
+  return new TextEncoder().encode(JSON.stringify(event)).length <= MAX_OBSERVATION_BYTES;
 }

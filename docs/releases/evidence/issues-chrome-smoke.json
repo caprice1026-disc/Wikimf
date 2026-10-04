@@ -1,0 +1,47 @@
+{
+  "fixture_api": true,
+  "results": [
+    {
+      "check": "installed-google-chrome-mv3",
+      "version": "Chrome/154.0.8037.93",
+      "id": "cddpgdplikhjcjgnajmdjbhhihbkegga",
+      "passed": true
+    },
+    {
+      "check": "real-DOM-NFC-exclusions-collapsed-fingerprint",
+      "passed": true
+    },
+    {
+      "check": "content-to-worker-durable-outbox-item-ACK",
+      "events": 2,
+      "passed": true
+    },
+    {
+      "check": "content-storage-credential-access-denied",
+      "passed": true
+    },
+    {
+      "check": "popup-sync-consent-no-token",
+      "passed": true
+    },
+    {
+      "check": "active-tab-switch-separate-sessions",
+      "sessions": 2,
+      "baseline": 10003,
+      "passed": true
+    },
+    {
+      "check": "offline-queue-service-worker-stop-survives",
+      "queued": 1,
+      "passed": true
+    },
+    {
+      "check": "offline-worker-restart-binding-restored",
+      "passed": true
+    },
+    {
+      "check": "restart-resend-ACK-only-deletion",
+      "passed": true
+    }
+  ]
+}

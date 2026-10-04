@@ -6,7 +6,7 @@ const origin = new URL(process.env.WIKIMF_API_ORIGIN || 'http://localhost:8000')
 const dashboard = new URL(process.env.WIKIMF_DASHBOARD_ORIGIN || (origin.protocol==='http:'?'http://localhost:5173':origin.origin));
 for (const target of [origin,dashboard]) if (target.username || target.password || target.pathname !== '/' || target.search || target.hash ||
   !(target.protocol === 'https:' || (target.protocol === 'http:' && ['127.0.0.1','localhost'].includes(target.hostname)))) throw new Error('Use HTTPS origins (loopback HTTP is development only).');
-const files = ['worker.js','outbox.js','popup.html','popup.js','popup.css','content.js'];
+const files = ['worker.js','outbox.js','sync-state.js','popup.html','popup.js','popup.css','content.js'];
 for (const file of files) await copyFile(new URL('./src/' + file, import.meta.url), new URL(file, root));
 await copyFile(new URL('../../packages/tracker/dist/wiki-tracker.js', import.meta.url), new URL('wiki-tracker.js', root));
 await copyFile(new URL('../../packages/tracker/tracker.js', import.meta.url), new URL('tracker-module.js', root));

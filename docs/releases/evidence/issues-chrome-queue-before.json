@@ -1,0 +1,17 @@
+{
+  "fixture_api": true,
+  "chrome": "Chrome/154.0.8037.93",
+  "extension_id": "aajdcjmbglnkmjjpdjpicfepooihoibe",
+  "results": [
+    {
+      "check": "installed-google-chrome-developer-mv3",
+      "passed": true
+    },
+    {
+      "check": "queue_full-real-append-refused-and-retained",
+      "rows": 186,
+      "passed": true
+    }
+  ],
+  "failure": "queue recovery must restore lease\n\nfalse !== true\n"
+}

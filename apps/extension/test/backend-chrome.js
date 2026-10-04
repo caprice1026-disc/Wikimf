@@ -13,11 +13,11 @@ const origin=new URL(fixture.api_origin).origin;
 assert.ok(['localhost','127.0.0.1'].includes(new URL(origin).hostname),'QA server must be loopback');
 const get=async path=>{const response=await fetch(origin+'/api/v1'+path,{headers:{Authorization:'Bearer '+fixture.device.token}});assert.equal(response.status,200);return response.json();};
 const baseline=await get('/me/stats');
-process.env.WIKIMF_API_ORIGIN=origin;process.env.WIKIMF_DASHBOARD_ORIGIN=new URL(fixture.dashboard_origin).origin;process.env.WIKIMF_EXTENSION_OUTPUT='./.build-backend/';await import('../build.js');
+process.env.WIKIMF_API_ORIGIN=origin;process.env.WIKIMF_DASHBOARD_ORIGIN=new URL(fixture.dashboard_origin).origin;process.env.WIKIMF_EXTENSION_OUTPUT='./.browser-tests/backend-extension/';await import('../build.js');
 const profile=fileURLToPath(new URL('../.browser-tests/backend-'+crypto.randomUUID()+'/',import.meta.url));await mkdir(profile,{recursive:true});
 const context=await chromium.launchPersistentContext(profile,{executablePath:process.env.WIKIMF_CHROME||'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true,ignoreDefaultArgs:['--disable-extensions'],args:['--enable-unsafe-extension-debugging']});
 try {
-  const cdp=await context.browser().newBrowserCDPSession(),loaded=await cdp.send('Extensions.loadUnpacked',{path:fileURLToPath(new URL('../.build-backend/',import.meta.url))});
+  const cdp=await context.browser().newBrowserCDPSession(),loaded=await cdp.send('Extensions.loadUnpacked',{path:fileURLToPath(new URL('../.browser-tests/backend-extension/',import.meta.url))});
   let worker=context.serviceWorkers().find(item=>item.url().includes(loaded.id));if(!worker) worker=await context.waitForEvent('serviceworker');
   await worker.evaluate(()=>{
     globalThis.__wikimfQa={acks:[],sessions:[]};const original=globalThis.fetch;
@@ -32,6 +32,7 @@ try {
     };
   });
   const popup=await context.newPage();await popup.goto('chrome-extension://'+loaded.id+'/popup.html');
+  await popup.evaluate(()=>chrome.storage.local.set({syncStatus:{code:'device_revoked',at:Date.now()}}));
   // Exercise the real device-link start/pending/approval/exchange path. The Web
   // session is a synthetic QA identity; no OAuth provider login is simulated.
   await context.addCookies([fixture.cookie]);
@@ -42,6 +43,7 @@ try {
   await popup.waitForTimeout(6000);
   const exchanged=await popup.evaluate(()=>chrome.runtime.sendMessage({type:'pair.poll'}));assert.equal(exchanged.error,undefined);
   const linked=await popup.evaluate(()=>chrome.runtime.sendMessage({type:'status'}));assert.equal(linked.linked,true);
+  assert.equal(linked.sync,'idle','explicit approval of a fresh device link recovers terminal state');
   const enabled=await popup.evaluate(()=>chrome.runtime.sendMessage({type:'recording',enabled:true,sendQueued:true}));assert.equal(enabled.recording,true);
   const html=await readFile(new URL('../../../packages/tracker/test/fixtures/prose.html',import.meta.url),'utf8');
   await context.route('https://ja.wikipedia.org/wiki/Fixture',route=>route.fulfill({status:200,contentType:'text/html',body:html}));
@@ -59,6 +61,7 @@ try {
   const stored=await popup.evaluate(()=>chrome.storage.local.get(['outbox','syncStatus']));assert.equal(stored.outbox.rows.length,0);assert.equal(stored.outbox.quarantine.length,0);
   const report={browser:context.browser().version(),extension_id:loaded.id,actual_fastapi_postgres:true,synthetic_identity_and_metadata:true,
     device_pairing_start_pending_web_approval_exchange:true,
+    explicit_device_link_terminal_recovery:true,
     strict_item_ACK:observations.acks,session_count:own.length,active_ms_added:after.activity.active_ms-baseline.activity.active_ms,article_match:true,persistent_queue_remaining:stored.outbox.rows.length};
   await writeFile(new URL('../.browser-tests/backend-report.json',import.meta.url),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
 } finally {await context.close();}

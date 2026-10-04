@@ -1,0 +1,60 @@
+{
+  "fixture_api": true,
+  "chrome": "Chrome/154.0.8037.93",
+  "extension_id": "gmiamjnnagnlaiecjaanjocjedcpnbnk",
+  "results": [
+    {
+      "check": "installed-google-chrome-developer-mv3",
+      "passed": true
+    },
+    {
+      "check": "queue_full-real-append-refused-and-retained",
+      "rows": 186,
+      "passed": true
+    },
+    {
+      "check": "queue_full-popup-discard-restores-lease-and-observation",
+      "passed": true
+    },
+    {
+      "check": "recovered-popup-and-worker-agree",
+      "passed": true
+    },
+    {
+      "check": "recovered-lease-survives-worker-restart",
+      "passed": true
+    },
+    {
+      "check": "queue_full-ACK-space-restores-lease-with-retained-records",
+      "passed": true
+    },
+    {
+      "check": "queue_expired-control-empty-cleanup-restores-lease-and-observation",
+      "passed": true
+    },
+    {
+      "check": "terminal-preserved-discard-empty-sync-offline-success-ACK-popup-lease",
+      "code": "schema_mismatch",
+      "passed": true
+    },
+    {
+      "check": "terminal-preserved-discard-empty-sync-offline-success-ACK-popup-lease",
+      "code": "device_revoked",
+      "passed": true
+    },
+    {
+      "check": "terminal-preserved-discard-empty-sync-offline-success-ACK-popup-lease",
+      "code": "owner_mismatch",
+      "passed": true
+    },
+    {
+      "check": "terminal-preserved-discard-empty-sync-offline-success-ACK-popup-lease",
+      "code": "reauth_required",
+      "passed": true
+    },
+    {
+      "check": "terminal-stop-survives-worker-restart",
+      "passed": true
+    }
+  ]
+}

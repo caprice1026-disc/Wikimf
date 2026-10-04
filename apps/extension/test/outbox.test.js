@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Outbox, trustedContent, trustedPage, focusedTab, validateObservation, QUEUE_AGE_MS } from '../src/outbox.js';
+import { Outbox, trustedContent, trustedPage, focusedTab, validateObservation, QUEUE_AGE_MS, QUEUE_LIMIT } from '../src/outbox.js';
 import { ReadingSession } from '../../../packages/tracker/tracker.js';
 const user={user_id:crypto.randomUUID(),device_id:crypto.randomUUID()};
 function memory(){const data={};return {get:async key=>structuredClone({[key]:data[key]}),set:async value=>Object.assign(data,structuredClone(value))};}
@@ -31,6 +31,29 @@ test('control epoch and article deletion prevent old offline sessions from retur
 test('queue expiry refuses new observations without silently replacing retained records',async()=>{
   let now=0;const queue=new Outbox(memory(),()=>now);await queue.enqueue(user,event());now=QUEUE_AGE_MS+1;
   await assert.rejects(queue.enqueue(user,event()),/queue_expired/);assert.equal((await queue.read()).rows.length,1);
+  assert.equal(await queue.canAcceptObservation(),false);
+  await queue.applyControl(user,{recording_epoch:1,deletion_markers:[]});assert.equal(await queue.canAcceptObservation(),true);
+});
+test('full queue retains records and becomes healthy only after actual space is available',async()=>{
+  const storage=memory(),queue=new Outbox(storage),large=event();
+  large.document.chunk_chars=Array(5000).fill(200);large.document.text_chars=1000000;
+  large.progress.covered_chunk_ids=Array.from({length:5000},(_,index)=>index);
+  assert.equal(validateObservation(large),true);
+  const state={rows:[],quarantine:[],lossCount:0},row={owner:user,created_at:Date.now(),event:large};
+  const rowBytes=Buffer.byteLength(JSON.stringify(row))+1;
+  state.rows=Array.from({length:Math.floor((QUEUE_LIMIT-Buffer.byteLength(JSON.stringify(state))+1)/rowBytes)},()=>({...row,event:{...large,event_id:crypto.randomUUID()}}));
+  await storage.set({outbox:state});
+  assert.equal(await queue.canAcceptObservation(),false);
+  await assert.rejects(queue.enqueue(user,{...large,event_id:crypto.randomUUID()}),/queue_full/);
+  assert.equal((await queue.read()).rows.length,state.rows.length);
+  await queue.discard(user);assert.equal(await queue.canAcceptObservation(),true);
+});
+test('discard and control do not hide foreign-owner rows that still block queue recovery',async()=>{
+  let now=0;const queue=new Outbox(memory(),()=>now),foreign={user_id:crypto.randomUUID(),device_id:crypto.randomUUID()},item=event();item.device_id=foreign.device_id;
+  await queue.enqueue(foreign,item);now=QUEUE_AGE_MS+1;
+  await queue.discard(user);await queue.applyControl(user,{recording_epoch:1,deletion_markers:[]});
+  assert.equal((await queue.read()).rows.length,1);assert.equal(await queue.canAcceptObservation(),false);
+  await queue.applyControl(foreign,{recording_epoch:1,deletion_markers:[]});assert.equal(await queue.canAcceptObservation(),true);
 });
 test('trusted content excludes foreign extensions, subframes, incognito, lookalike URLs; popup is exact',()=>{
   const parse=url=>url==='https://ja.wikipedia.org/wiki/A'?{}:null;
@@ -50,4 +73,5 @@ test('observation type boundary rejects embedded text, malformed chunks/interval
   assert.equal(validateObservation({...valid,interval:{...valid.interval,text:'private body'}}),false);
   assert.equal(validateObservation({...valid,progress:{...valid.progress,max_scroll_ratio:NaN}}),false);
   assert.equal(validateObservation({...valid,article_id:'secret'}),false);
+  assert.equal(validateObservation({...valid,progress:{...valid.progress,covered_chunk_ids:Array(50000).fill(0)}}),false);
 });

@@ -24,9 +24,9 @@ const server = http.createServer(async(req,res)=>{
 });
 await new Promise(done=>server.listen(0,'127.0.0.1',done));
 process.env.WIKIMF_API_ORIGIN='http://127.0.0.1:'+server.address().port;
-process.env.WIKIMF_EXTENSION_OUTPUT='./.build-test/';
+process.env.WIKIMF_EXTENSION_OUTPUT='./.browser-tests/smoke-extension/';
 await import('../build.js');
-const extensionPath=fileURLToPath(new URL('../.build-test/',import.meta.url));
+const extensionPath=fileURLToPath(new URL('../.browser-tests/smoke-extension/',import.meta.url));
 const profile=fileURLToPath(new URL('../.browser-tests/'+crypto.randomUUID()+'/',import.meta.url));
 await mkdir(profile,{recursive:true});
 let context;
