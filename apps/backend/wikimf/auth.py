@@ -10,6 +10,7 @@ from .articles import APIError
 from .db import Device, Identity, User, WebSession, now, utc
 
 COOKIE = "wikimf_session"
+RECENT_AUTH = timedelta(minutes=10)
 
 
 def digest(value):
@@ -20,9 +21,24 @@ def token():
     return secrets.token_urlsafe(32)
 
 
+def hash_user_code(code, salt=None):
+    salt = salt or secrets.token_hex(16)
+    value = hashlib.pbkdf2_hmac("sha256", code.upper().encode(), bytes.fromhex(salt), 600_000).hex()
+    return salt + ":" + value
+
+
+def verify_user_code(code, saved):
+    return secrets.compare_digest(hash_user_code(code, saved.split(":", 1)[0]), saved)
+
+
+def require_recent_auth(web):
+    if not web or not web.authenticated_at or not timedelta(0) <= now() - utc(web.authenticated_at) < RECENT_AUTH:
+        raise APIError("reauthentication_required", 403)
+
+
 def issue_web_session(db, user_id):
     secret = token()
-    session = WebSession(token_hash=digest(secret), user_id=user_id, csrf_token=token(), expires_at=now() + timedelta(days=7))
+    session = WebSession(token_hash=digest(secret), user_id=user_id, csrf_token=token(), authenticated_at=now(), expires_at=now() + timedelta(days=7))
     db.add(session)
     db.flush()
     return secret, session

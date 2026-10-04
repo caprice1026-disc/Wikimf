@@ -12,6 +12,8 @@ TLS proxyでHTTPS、HSTS、集約rate limit、最大request bodyを設定する�
 
 まず保持データのbackupを取り、依存をlockファイルから導入して `alembic upgrade head` を実行する。`GET /health` のschema/policyとmigration head、Dashboard、端末連携、観測ACK、非公開APIの認証を確認してから利用を開始する。migrationのdowngradeは空の隔離DBでのみ確認済み。保持データのある本番DBをdowngradeする手順にはせず、旧版への復帰はbackupと安全台帳で行う。
 
+`0004_auth_boundaries` では5分有効の連携待ち要求を破棄し、確認コードをsalt付きhash保存へ変更する。更新中の端末連携は最初からやり直す。既存sessionは読み取りを継続できるが、重要操作には既存providerで本人確認を行う。連携済み端末や読書履歴は移行で削除しない。APIとDashboardを同時に更新し、期限切れの403から本人確認へ進めることを確認する。
+
 ## 保持と停止
 
 閉じた検証中はraw event、正規化interval、判定根拠を本人削除まで保持する。端末Outboxは7日、Android 10 MiB / Chrome 8 MiB。上限・期限による保留や破棄を画面で確認する。検索の途中入力、本文、キー入力、Cookie、外部referrerは送信しない。
@@ -42,7 +44,7 @@ $env:DATABASE_URL='postgresql+psycopg://wikimf@127.0.0.1:54329/wikimf_restored'
 
 `apply-safety` は旧Web session/grantを削除し、端末tokenを全失効する。最新台帳にないuser/identity、旧epoch履歴、削除記事、解除済みmanual stateを復活させず、収集・公開をOFFにする。backupにない記事のmarker/manual stateは追加しない。現行Userロックとtransactionで適用し、本人の再ログイン・再連携・再同意を待つ。処理が失敗したDBはAPIへ接続せず、失敗理由を解決して再実行する。
 
-実行済みの復旧ドリルは `python scripts/verify_recovery.py`。専用のUUID付きDBだけを作成し、空DB migration往復、raw/manual/identityを保持した0002→0003 upgrade、実 `pg_dump` / `pg_restore`、記事/全履歴/アカウント削除、identity解除、バックアップ後の記事参照、旧token/session失効を確認する。既存DB・volumeを消さない。
+実行済みの復旧ドリルは `python scripts/verify_recovery.py`。専用のUUID付きDBだけを作成し、空DB migration往復、raw/manual/identityを保持した0002→0004 upgrade、連携待ちコードの消去、既存sessionの本人確認要求、実 `pg_dump` / `pg_restore`、記事/全履歴/アカウント削除、identity解除、バックアップ後の記事参照、旧token/session失効を確認する。保持データでのdowngradeはこの使い捨てfixtureだけに限定し、既存DB・volumeを消さない。
 
 `rebuild` はraw evidenceから同じ関数で二回再計算し、一致と隔離件数を報告する。現行は画面表示時にも同じreplayを使うため、別projection表を作らない。500 eventsのローカルPG計測は [検証記録](verification.md) を参照する。
 

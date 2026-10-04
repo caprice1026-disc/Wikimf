@@ -52,6 +52,7 @@ class WebSession(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     csrf_token: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    authenticated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
@@ -76,7 +77,7 @@ class DeviceLink(Base):
     source: Mapped[str] = mapped_column(String(30))
     display_name: Mapped[str] = mapped_column(String(100))
     secret_hash: Mapped[str] = mapped_column(String(64))
-    user_code: Mapped[str] = mapped_column(String(16))
+    user_code_hash: Mapped[str] = mapped_column(String(97))
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     exchanged: Mapped[bool] = mapped_column(Boolean, default=False)

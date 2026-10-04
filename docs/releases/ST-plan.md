@@ -50,6 +50,8 @@ QA A/Bを別profileで使う。AのGoogle→logout→GitHubで、同emailであ�
 
 追加操作を中断→別providerの通常login、並行したGoogle/GitHub login、別profile callback、state改変、callback再使用、承認拒否/期限切れを試す。実providerの署名/state/PKCE確認と、既存の合成provider adapterによる認証suiteは別欄にする。端末grantはcode一致の明示承認が必要で、未承認pending、期限切れ、pollの429、exchange1回、replay拒否を確認する。Wikipedia JS/popupへtokenを返さないことも確認する。
 
+Issue #18で追加した本人確認も同じ実providerで検証する。10分を過ぎたsessionでは重要操作が403となり、Google/GitHubで既存identityを選んだ後だけ実行できること、別subject・別session・取消では操作を継続しないこと、戻った画面で削除を自動実行しないことを確認する。Googleは `prompt=select_account consent`、GitHubは `prompt=select_account` を使う。既存のprovider sessionがある場合のパスワード/MFA再入力は保証しないため、放置端末に対する認証強度を実画面で評価し、公開前に受入方針を決める。[Google OIDC](https://developers.google.com/identity/openid-connect/openid-connect)、[GitHub OAuth](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)
+
 端末tokenでprivacy/manual/delete APIを呼び403、AからBのsession/article stateへ操作して拒否、revoked tokenで401を確認する。拒否後のBの統計増分は0。照合は合成QAデータだけで行う。
 
 ## ST-03: HTTPSと秘密・cache境界

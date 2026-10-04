@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from starlette.middleware.sessions import SessionMiddleware
 
 from .articles import APIError, MediaWikiClient, article_json, resolve
-from .auth import COOKIE, authenticate, configure_oauth, digest, identify, issue_web_session, token
+from .auth import COOKIE, RECENT_AUTH, authenticate, configure_oauth, digest, hash_user_code, identify, issue_web_session, require_recent_auth, token, verify_user_code
 from .contracts import BatchGet, DeleteAccount, EventBatch, PairApproval, PairExchange, PairInput, PrivacyInput, ResolveInput, StateInput
 from .db import Article, Base, DeletionMarker, Device, DeviceLink, Identity, ManualState, ReadingEvent, ReadingSession, User, WebSession, database, now, utc
 from .ingest import accept_batch, lock_user
@@ -107,35 +107,73 @@ def create_app(database_url=None, mediawiki=None):
 
     def user_json(user, device=None, web=None):
         return {"user_id":user.id,"display_name":user.display_name,"timezone":user.timezone,"recording_epoch":user.recording_epoch,
-                "collection_enabled":user.collection_enabled,"csrf_token":web.csrf_token if web else None,"device_id":device.id if device else None}
+                "collection_enabled":user.collection_enabled,"csrf_token":web.csrf_token if web else None,"device_id":device.id if device else None,
+                "recent_auth_until":(utc(web.authenticated_at)+RECENT_AUTH).isoformat() if web and web.authenticated_at else None}
 
-    @app.get(PREFIX+"/auth/{provider}/start")
-    async def oauth_start(provider, request: Request):
-        throttle(request,"oauth",10)
-        client = oauth.create_client(provider) if provider in ("google","github") else None
-        if not client:
-            raise APIError("provider_not_configured",503)
-        return_to = request.query_params.get("return_to", "/home")
+    def validate_return_to(return_to):
         target = urlsplit(return_to)
         allowed = target.path in ("/home", "/app", "/device-link") or target.path.startswith(("/link-device/","/device-link/","/app/"))
         if len(return_to)>2000 or target.scheme or target.netloc or target.fragment or not allowed:
             raise APIError("invalid_return_url")
         if "\\" in return_to or "//" in return_to or any(ord(c)<32 for c in return_to) or {"token","device_secret","code"}.intersection(parse_qs(target.query)):
             raise APIError("invalid_return_url")
-        intent = request.session.pop("link_intent",None)
+        return return_to
+
+    @app.post(PREFIX+"/auth/{provider}/reauthenticate")
+    def reauthenticate(provider,request: Request,db=Depends(db_session)):
+        user,_,web = authenticate(request,db,web_only=True)
+        throttle(request,"reauth",10)
+        if not db.scalar(select(Identity).where(Identity.user_id==user.id,Identity.provider==provider)):
+            raise APIError("identity_not_found",404)
+        if provider not in ("google","github") or not oauth.create_client(provider):
+            raise APIError("provider_not_configured",503)
+        return_to = validate_return_to(request.query_params.get("return_to","/app/settings/account"))
+        nonce = token()
+        request.session["reauth_intent"] = {"user_id":user.id,"session_hash":web.token_hash,"provider":provider,"nonce":nonce,"created_at":time.time(),"return_to":return_to}
+        return {"authorization_url":api_origin+PREFIX+f"/auth/{provider}/start?reauth="+nonce}
+
+    @app.get(PREFIX+"/auth/{provider}/start")
+    async def oauth_start(provider, request: Request,db=Depends(db_session)):
+        throttle(request,"oauth",10)
+        client = oauth.create_client(provider) if provider in ("google","github") else None
+        if not client:
+            raise APIError("provider_not_configured",503)
+        return_to = validate_return_to(request.query_params.get("return_to", "/home"))
         link_user_id = None
         supplied_intent = request.query_params.get("link")
+        supplied_reauth = request.query_params.get("reauth")
+        if supplied_intent and supplied_reauth:
+            raise APIError("invalid_identity_link",400)
+        intent = request.session.pop("link_intent",None)
+        reauth_intent = request.session.pop("reauth_intent",None)
+        session_hash = None
         if supplied_intent:
             if not intent or intent["provider"]!=provider or time.time()-intent["created_at"]>600 or not secrets.compare_digest(supplied_intent,intent["nonce"]):
                 raise APIError("invalid_identity_link",400)
             link_user_id = intent["user_id"]
+            current,_,web = authenticate(request,db,web_only=True)
+            require_recent_auth(web)
+            if current.id != link_user_id:
+                raise APIError("identity_link_session_changed",403)
+            session_hash = web.token_hash
+        if supplied_reauth:
+            if not reauth_intent or reauth_intent["provider"]!=provider or time.time()-reauth_intent["created_at"]>600 or not secrets.compare_digest(supplied_reauth,reauth_intent["nonce"]):
+                raise APIError("invalid_reauthentication",400)
+            current,_,web = authenticate(request,db,web_only=True)
+            if current.id != reauth_intent["user_id"] or web.token_hash != reauth_intent["session_hash"]:
+                raise APIError("reauthentication_session_changed",403)
+            session_hash = web.token_hash
+            return_to = reauth_intent["return_to"]
         state = token()
         flows = {key:value for key,value in request.session.get("oauth_flows",{}).items() if time.time()-value["started_at"]<600}
         if len(flows)>=4:
             raise APIError("too_many_oauth_flows",429)
-        flows[state] = {"provider":provider,"link_user_id":link_user_id,"return_to":return_to,"started_at":time.time()}
+        flows[state] = {"provider":provider,"link_user_id":link_user_id,"return_to":return_to,"started_at":time.time(),
+                        "reauth_user_id":reauth_intent["user_id"] if supplied_reauth else None,"session_hash":session_hash}
         request.session["oauth_flows"] = flows
-        return await client.authorize_redirect(request,api_origin+PREFIX+f"/auth/{provider}/callback",state=state,code_verifier=secrets.token_urlsafe(48))
+        # Both providers support account selection; password re-entry is provider policy.
+        prompt = {"prompt":"select_account consent" if provider=="google" else "select_account"} if supplied_reauth else {}
+        return await client.authorize_redirect(request,api_origin+PREFIX+f"/auth/{provider}/callback",state=state,code_verifier=secrets.token_urlsafe(48),**prompt)
 
     @app.get(PREFIX+"/auth/{provider}/callback")
     async def oauth_callback(provider, request: Request, db=Depends(db_session)):
@@ -146,6 +184,11 @@ def create_app(database_url=None, mediawiki=None):
         request.session["oauth_flows"] = flows
         if not client or not flow or flow["provider"]!=provider or time.time()-flow["started_at"]>600:
             raise APIError("oauth_invalid_state",400)
+        def reauth_redirect(key,value):
+            target = flow["return_to"]
+            return RedirectResponse(dashboard+target+("&" if "?" in target else "?")+urlencode({key:value}),status_code=303)
+        if flow.get("reauth_user_id") and request.query_params.get("error"):
+            return reauth_redirect("reauth_error","reauthentication_cancelled" if request.query_params["error"]=="access_denied" else "reauthentication_failed")
         try:
             grant = await client.authorize_access_token(request)
             if provider == "google":
@@ -160,26 +203,49 @@ def create_app(database_url=None, mediawiki=None):
                 if not isinstance(info.get("id"),int):
                     raise APIError("oauth_invalid_identity",400)
                 subject,name = str(info["id"]),info.get("name") or info.get("login") or "Reader"
-        except (OAuthError,httpx.HTTPError,ValueError):
+        except (OAuthError,httpx.HTTPError,ValueError,APIError):
+            if flow.get("reauth_user_id"):
+                return reauth_redirect("reauth_error","reauthentication_failed")
             raise APIError("oauth_failed",400) from None
         link_user_id = flow["link_user_id"]
+        authenticated_at = None
+        verified_user = None
+        if flow.get("reauth_user_id"):
+            try:
+                current,_,web = authenticate(request,db,web_only=True)
+            except APIError:
+                return reauth_redirect("reauth_error","reauthentication_session_changed")
+            if current.id != flow["reauth_user_id"] or web.token_hash != flow["session_hash"]:
+                return reauth_redirect("reauth_error","reauthentication_session_changed")
+            verified_user = lock_user(db,current.id)
+            if db.scalar(select(WebSession.token_hash).where(WebSession.token_hash==web.token_hash)) is None:
+                return reauth_redirect("reauth_error","reauthentication_session_changed")
+            identity = db.scalar(select(Identity).where(Identity.user_id==current.id,Identity.provider==provider,Identity.subject==subject))
+            if not identity:
+                return reauth_redirect("reauth_error","reauthentication_identity_mismatch")
         if link_user_id:
-            current,_,_ = authenticate(request,db,web_only=True)
-            if current.id != link_user_id:
+            current,_,web = authenticate(request,db,web_only=True)
+            require_recent_auth(web)
+            if current.id != link_user_id or web.token_hash != flow.get("session_hash"):
                 raise APIError("identity_link_session_changed",403)
+            authenticated_at = web.authenticated_at
             lock_user(db,current.id)
+            if db.scalar(select(WebSession.token_hash).where(WebSession.token_hash==web.token_hash)) is None:
+                raise APIError("identity_link_session_changed",403)
         try:
-            user = identify(db,provider,subject,name,link_user_id)
+            user = verified_user or identify(db,provider,subject,name,link_user_id)
             old_secret = request.cookies.get(COOKIE)
             if old_secret:
                 db.execute(delete(WebSession).where(WebSession.token_hash == digest(old_secret)))
             secret,session = issue_web_session(db,user.id)
+            if link_user_id:
+                session.authenticated_at = authenticated_at
             db.commit()
         except IntegrityError:
             db.rollback()
             raise APIError("identity_conflict",409) from None
         return_to = flow["return_to"]
-        response = RedirectResponse(dashboard+return_to,status_code=303)
+        response = reauth_redirect("reauthenticated","1") if verified_user else RedirectResponse(dashboard+return_to,status_code=303)
         response.set_cookie(COOKIE,secret,max_age=7*86400,httponly=True,secure=production,samesite="lax",path="/")
         return response
 
@@ -207,11 +273,12 @@ def create_app(database_url=None, mediawiki=None):
     def start_link(data: PairInput,request: Request,db=Depends(db_session)):
         throttle(request,"pair",10,300)
         secret = token()
+        user_code = secrets.token_hex(4).upper()
         link = DeviceLink(source=data.source,display_name=data.display_name,secret_hash=digest(secret),
-                          user_code=secrets.token_hex(4).upper(),expires_at=now()+timedelta(minutes=5))
+                          user_code_hash=hash_user_code(user_code),expires_at=now()+timedelta(minutes=5))
         db.add(link)
         db.commit()
-        return {"link_id":link.id,"device_secret":secret,"user_code":link.user_code,"verification_url":dashboard+"/link-device/"+link.id,
+        return {"link_id":link.id,"device_secret":secret,"user_code":user_code,"verification_url":dashboard+"/link-device/"+link.id,
                 "expires_at":utc(link.expires_at).isoformat(),"poll_interval_seconds":5}
 
     def get_link(db,link_id):
@@ -224,7 +291,7 @@ def create_app(database_url=None, mediawiki=None):
     def view_link(link_id: UUID,request: Request,db=Depends(db_session)):
         authenticate(request,db,web_only=True)
         link = get_link(db,link_id)
-        return {"link_id":link.id,"display_name":link.display_name,"source":link.source,"user_code":link.user_code,
+        return {"link_id":link.id,"display_name":link.display_name,"source":link.source,
                 "scopes":["reading:write","reading:read","profile:read"],"expires_at":utc(link.expires_at).isoformat(),"approved":link.user_id is not None}
 
     @app.post(PREFIX+"/device-links/{link_id}/approve")
@@ -234,7 +301,7 @@ def create_app(database_url=None, mediawiki=None):
         link = get_link(db,link_id)
         if link.user_id and link.user_id != user.id:
             raise APIError("device_link_already_approved",409)
-        if not secrets.compare_digest(data.user_code.upper(),link.user_code):
+        if not verify_user_code(data.user_code,link.user_code_hash):
             link.attempts += 1
             if link.attempts >= 5:
                 link.expires_at = now()
@@ -277,7 +344,8 @@ def create_app(database_url=None, mediawiki=None):
 
     @app.post(PREFIX+"/me/identities/{provider}/link")
     def link_identity(provider,request: Request,db=Depends(db_session)):
-        user,_,_ = authenticate(request,db,web_only=True)
+        user,_,web = authenticate(request,db,web_only=True)
+        require_recent_auth(web)
         if provider not in ("google","github") or not oauth.create_client(provider):
             raise APIError("provider_not_configured",503)
         user = lock_user(db,user.id)
@@ -289,7 +357,8 @@ def create_app(database_url=None, mediawiki=None):
 
     @app.delete(PREFIX+"/me/identities/{provider}")
     def unlink_identity(provider,request: Request,db=Depends(db_session)):
-        user,_,_ = authenticate(request,db,web_only=True)
+        user,_,web = authenticate(request,db,web_only=True)
+        require_recent_auth(web)
         lock_user(db,user.id)
         items = list(db.scalars(select(Identity).where(Identity.user_id == user.id)))
         matches = [i for i in items if i.provider == provider]
@@ -447,9 +516,11 @@ def create_app(database_url=None, mediawiki=None):
 
     @app.patch(PREFIX+"/me/privacy")
     def patch_privacy(data:PrivacyInput,request:Request,db=Depends(db_session)):
-        user,_,_ = authenticate(request,db,web_only=True)
+        user,_,web = authenticate(request,db,web_only=True)
         user = lock_user(db,user.id)
         updates = data.model_dump(exclude_unset=True)
+        if any(updates.get(key) is True and not getattr(user,key) for key in ("profile_public","publish_total_time","publish_achievements")):
+            require_recent_auth(web)
         if any(v is None for v in updates.values()):
             raise APIError("invalid_privacy_settings")
         if updates.get("collection_enabled") and (updates.get("consent_version") or user.consent_version)!="privacy-v1":
@@ -491,7 +562,8 @@ def create_app(database_url=None, mediawiki=None):
 
     @app.delete(PREFIX+"/me/history")
     def delete_history(request:Request,db=Depends(db_session)):
-        user,_,_ = authenticate(request,db,web_only=True)
+        user,_,web = authenticate(request,db,web_only=True)
+        require_recent_auth(web)
         user = lock_user(db,user.id)
         clear_history(db,user.id)
         user.recording_epoch += 1
@@ -508,7 +580,8 @@ def create_app(database_url=None, mediawiki=None):
 
     @app.delete(PREFIX+"/me")
     def delete_account(data:DeleteAccount,request:Request,db=Depends(db_session)):
-        user,_,_ = authenticate(request,db,web_only=True)
+        user,_,web = authenticate(request,db,web_only=True)
+        require_recent_auth(web)
         user = lock_user(db,user.id)
         clear_history(db,user.id)
         for model in (DeletionMarker,Identity,WebSession,DeviceLink,Device):

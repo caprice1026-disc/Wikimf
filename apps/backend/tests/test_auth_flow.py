@@ -179,8 +179,8 @@ def test_second_inflight_link_cannot_add_another_subject_for_provider(env, provi
     assert callback(client, "github", states[0]).status_code == 303
     providers["github"].subject = "424243"
     rejected = callback(client, "github", states[1])
-    assert rejected.status_code == 409
-    assert rejected.json()["error"]["code"] == "provider_already_linked"
+    assert rejected.status_code == 403
+    assert rejected.json()["error"]["code"] == "identity_link_session_changed"
     assert providers["github"].verified == 2
     assert client.get("/api/v1/me").json()["user_id"] == ids["user_id"]
     assert identity_providers(app, ids["user_id"]) == ["github", "google"]

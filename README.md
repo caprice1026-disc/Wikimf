@@ -53,7 +53,11 @@ Dashboardは `http://localhost:5173`。拡張は `chrome://extensions` の開発
 
 Google/GitHubのOAuth登録、client ID/secret、接続先は運用者が設定します。callbackは `/api/v1/auth/google/callback` と `/api/v1/auth/github/callback`。provider secretはBackendだけに置きます。同じメールアドレスによる自動統合は行わず、別のログイン方法はログイン済みの設定から追加します。
 
-Android/拡張は外部ブラウザで端末名・確認コードを承認し、一回限りのgrantから専用tokenを取得します。端末tokenで管理操作はできません。削除・公開設定・identity管理にはWeb sessionとCSRF検証が必要です。
+Android/拡張は外部ブラウザで端末名・確認コードを承認し、一回限りのgrantから専用tokenを取得します。確認コードは元の端末にだけ表示し、Web画面で入力します。Backendにはsalt付きhashを保存します。端末tokenで管理操作はできません。
+
+アカウント・全履歴の削除、ログイン方法の追加/解除、公開する情報の拡張には、Web sessionとCSRFに加えて10分以内の本人確認が必要です。期限が過ぎたら設定画面で既存のGoogle/GitHubアカウントを選び、確認後に操作をもう一度実行します。別のアカウントを選んだ場合は操作を継続しません。公開停止と収集停止は本人確認の期限に関係なく実行できます。providerにログイン済みの場合、パスワードやMFAの再入力はproviderの判断によります。
+
+DB migration `0004_auth_boundaries` は連携待ちの要求を失効させ、既存Web sessionの重要操作に本人確認を要求します。連携済み端末と読書履歴は保持されます。更新前にbackupを取り、連携途中の端末は更新後にコードを再発行してください。
 
 AndroidのAPI接続先を変更すると端末連携とクラウド同意を解除します。再連携後に同意してください。旧Outboxは旧owner/deviceのまま保持し、新しい連携へ付け替えません。
 

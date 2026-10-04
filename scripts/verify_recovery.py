@@ -11,7 +11,7 @@ sys.path[:0]=[str(ROOT),str(ROOT/"apps/backend"),str(ROOT/"apps/backend/tests")]
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine,select,text
+from sqlalchemy import create_engine,inspect,select,text
 from conftest import FixtureWiki,observation,send,web_headers
 from scripts.backend_ops import apply_safety,safety_manifest
 from wikimf.auth import digest,identify,issue_web_session,token
@@ -49,7 +49,7 @@ def main():
         os.environ["DATABASE_URL"]=prefix+"/"+source
         command.upgrade(cfg,"head")
         command.downgrade(cfg,"base")  # Only fresh empty DB; never retained-data rollback.
-        command.upgrade(cfg,"0002_intervals")
+        command.upgrade(cfg,"head")
         app=create_app(prefix+"/"+source,FixtureWiki());apps.append(app)
         credentials=[]
         with app.state.sessions() as db:
@@ -71,7 +71,12 @@ def main():
                 client.cookies.set("wikimf_session",ids["web_secret"])
                 assert send(client,ids,observation(ids,seconds=30)).json()["results"][0]["status"]=="accepted"
                 assert client.put("/api/v1/me/articles/"+ids["article_id"]+"/state",headers=web_headers(ids),json={"state":"completed"}).status_code==200
-            # Upgrade retained evidence; the new cache table must not alter history.
+            # Downgrade only this disposable fixture to the retained 0002 shape.
+            # No current application routes run against the old schema.
+            command.downgrade(cfg,"0002_intervals")
+            with app.state.engine.begin() as conn:
+                conn.execute(text("INSERT INTO device_link_requests (id,source,display_name,secret_hash,user_code,expires_at,exchanged,attempts) VALUES (:id,'android_reader','Legacy pairing',:secret,'OLD12345',:expiry,false,0)"),
+                             {"id":str(uuid4()),"secret":digest("legacy-test-secret"),"expiry":now()+timedelta(minutes=5)})
             command.upgrade(cfg,"head")
             with app.state.sessions() as db:
                 assert len(list(db.scalars(select(ReadingEvent))))==3
@@ -79,6 +84,20 @@ def main():
                 assert len(list(db.scalars(select(Identity))))==4
                 aliases=list(db.scalars(select(ArticleAlias)))
                 assert len(aliases)==1 and aliases[0].article_id==credentials[0]["article_id"]
+                assert not db.execute(text("SELECT id FROM device_link_requests")).first()
+                assert all(web.authenticated_at is None for web in db.scalars(select(WebSession)))
+                columns = {c["name"] for c in inspect(db.bind).get_columns("device_link_requests")}
+                assert "user_code" not in columns and "user_code_hash" in columns
+            for ids in credentials:
+                client.cookies.set("wikimf_session",ids["web_secret"])
+                assert client.get("/api/v1/me").status_code==200
+                assert client.delete("/api/v1/me/history",headers=web_headers(ids)).json()["error"]["code"]=="reauthentication_required"
+            # The synthetic QA identities obtain fresh sessions after migration.
+            with app.state.sessions() as db:
+                for ids in credentials:
+                    secret,web=issue_web_session(db,ids["user_id"])
+                    ids.update(web_secret=secret,csrf=web.csrf_token)
+                db.commit()
             pg("pg_dump","-Fc","-f",str(archive),source)
             # Delete article, account and all history after the old backup was created.
             for index,ids in enumerate(credentials):
@@ -114,7 +133,7 @@ def main():
         with TestClient(restored) as client:
             for ids in credentials:
                 assert send(client,ids,observation(ids)).status_code==401
-        report={"result":"pass","database":"PostgreSQL17.6","checks":["empty-migration-upgrade-downgrade-upgrade","retained-data-migration-0002-to-0003","actual-pg-dump-restore","article-deletion-not-resurrected","account-deletion-not-resurrected","epoch-all-history-not-resurrected","all-old-device-tokens-refused","all-web-sessions-revoked","manual-states-not-resurrected","collection-and-publication-disabled","unlinked-identity-not-restored","missing-post-backup-article-safe"]}
+        report={"result":"pass","database":"PostgreSQL17.6","checks":["empty-migration-upgrade-downgrade-upgrade","retained-data-migration-0002-to-0004","pending-pairing-code-removed-on-migration","legacy-sessions-readable-but-require-reauth","actual-pg-dump-restore","article-deletion-not-resurrected","account-deletion-not-resurrected","epoch-all-history-not-resurrected","all-old-device-tokens-refused","all-web-sessions-revoked","manual-states-not-resurrected","collection-and-publication-disabled","unlinked-identity-not-restored","missing-post-backup-article-safe"]}
         (evidence/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
         print(json.dumps(report))
     finally:
