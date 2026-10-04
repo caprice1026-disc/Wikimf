@@ -6,6 +6,8 @@ Wikipedia の読書記録を、自分の非公開履歴・統計へまとめる�
 
 M0〜M10の機能を実装し、PostgreSQL・実Chrome・Android15エミュレータで閉じた検証を完了しました。一般公開前に必要な実OAuth、HTTPS配備、物理実機、署名と継続利用の確認は [ST計画](docs/releases/ST-plan.md) と [Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13) に残しています。
 
+Androidは「エミュレーターで機能確認 → ST専用鍵で署名したrelease APK → 自分の実機1台へインストール → 実Wikipedia/Backendで縦断確認 → 実機固有の挙動 → 3〜7日の普段使い」の順で進めます。実機では画面OFF/復帰、回線切替と未送信の再同期、外部ブラウザ連携、Keystore、日本語IMEを重点的に確認します。HTTPS接続先は未準備のため、用意後にAccountで設定します。
+
 Webダッシュボードは、読書履歴を中心にした白・セージ・深緑の画面へ刷新しました。期間別チャート、記事の状態と本文表示率、ライブラリ、設定を統一し、モバイルの下部ナビゲーションとダークテーマに対応しています。[画面と追加検証](docs/releases/issue-fixes-dashboard.md) に、Issue #14〜#18の修正結果をまとめています。
 
 ![Webダッシュボード](docs/releases/evidence/dashboard-redesign-desktop.png)

@@ -1,6 +1,27 @@
 # MVP-AのST計画
 
-更新日: 2026-10-04。実装済み機能の残るシステムテスト（ST）を実環境へ移すための手順。ケースごとの現在地は[受入台帳](acceptance-matrix.md)、仕様の基準は[ADR](../adr/0001-mvp-contract.md)と[実装計画M10](../wikimf-implementation-plan-v0.1.md)。残件は[追跡Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13)で管理する。Google/GitHubの実資格情報、HTTPS配備先、release署名鍵、物理Androidは今回未準備のため後日実施する。Android 15/API 35エミュレータで先行確認することはユーザー承認済みであり、物理実機確認済みとは記録しない。
+更新日: 2026-10-04。実装済み機能の残るシステムテスト（ST）を実環境へ移すための手順。ケースごとの現在地は[受入台帳](acceptance-matrix.md)、仕様の基準は[ADR](../adr/0001-mvp-contract.md)と[実装計画M10](../wikimf-implementation-plan-v0.1.md)。残件は[追跡Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13)で管理する。Androidはエミュレーターの機能確認後にST用署名済みrelease APKを作成し、ユーザー自身の実機1台で縦断確認と3〜7日の自己利用を行う方針へ変更した。実OAuth、HTTPS配備、物理端末の操作は必要な環境が揃ってから実施し、エミュレーター合格を実機合格に置き換えない。
+
+## Androidの6段階の進め方
+
+| 段階 | 実施内容 | 次へ進む条件 |
+|---|---|---|
+| Phase 1 | API35エミュレーター＋実Backend/PG＋Dashboard。検索、日英記事、計測、永続化、同意/削除、復帰、offline同期を既存証跡と追加実測で確認する | 機能不具合を修正し、追加ケースと影響範囲の回帰が成功。合成provider/metadataと外部環境待ちは明記する |
+| Phase 2 | ST専用鍵でrelease APKを署名し、署名・manifest・asset・起動を検査する | インストール可能なAPK、source SHA/hash/証明書digest、再ビルド手順が揃う。debuggable・WebView debugging・cleartext例外を有効にしない |
+| Phase 3 | ユーザー自身のAndroid 1台へAPKをsideloadする | OS/WebView/端末とAPKを記録し、起動・設定・Wikipedia表示を確認する |
+| Phase 4 | 実Wikipedia→tracker→実Backend→PostgreSQL→Dashboardを通す | 所有者と記事ID、正の読書時間/coverage、ACK、画面の値を照合する。実HTTPSとGoogle/GitHubの外部ブラウザ連携を含む |
+| Phase 5 | 実機で差の出やすいWebView・ライフサイクル・回線・Keystore・操作感を確認する | 下記の重点項目を通し、背景での誤計測や同期停止、認証情報喪失がない |
+| Phase 6 | 3〜7日、普通にWikipediaを読む | 実際の期間・記事数・不具合・修正後確認を記録し、日常利用で表示と計測が自然かを判断する |
+
+実機では全ての単体テストをやり直さず、10〜20記事を普通に読みながら長短・画像/表・日英・fragment・戻る/進むを確認する。Home、別アプリ、画面OFF、lock、放置、task終了、OS killの前後で読書時間を照合し、background滞在を加算しないことを見る。
+
+回線確認はWi-Fi→モバイル、Wi-Fi OFF、機内モード、数分のoffline読書からの復帰を含める。保存queue→ネットワーク復帰→WorkManager→API ACK→Dashboardを一続きで照合する。端末の「強制停止」中はOSがバックグラウンド処理を止めるため、通常のprocess killと区別し、手動起動後に復旧することを確認する。
+
+端末連携はAndroid→外部Chrome等→Google/GitHub→確認コード→Android→exchange→記録開始の順で行う。release APKのKeystoreはアプリ終了、再起動、端末再起動を越えて認証情報を読めることを確認する。日本語IMEとkeyboard表示時の配置、スクロール、回転、フォントサイズも実機で見る。
+
+3〜7日の自己利用では、時間が短すぎる、partialに偏る、検索から戻ると記録が切れる、長時間放置後に再開しない、前日の記事が重複する、同期が止まる、という違和感を記録する。idle60秒など既知の計測条件は併記し、期待する使用感と測定仕様の差を判断する。利用していない日は利用日数に含めない。MVPでは実機1台を基準とし、複数端末サービスによる検証は将来のStore公開時に必要性を判断する。
+
+ST署名鍵はdebug鍵・正式公開用鍵と分離し、Gitや配布ZIPへ含めない。同署名のST版を再インストールして更新を確認する。正式公開用署名への移行、Play Store登録、複数端末展開は今回のAPK作成と別の受入条件である。
 
 ## 実施順と判定
 
@@ -19,7 +40,7 @@ P0は閉じた検証の縦断確認と漏洩・二重計上・削除復活の防
 | ST-09 | P0 | 隔離QA user、通信障害proxy、queueを残せる端末 | ACK紛失/再送/kill/owner/容量/期限/clock/skew | D01～10/D21～23、G07～09 |
 | ST-10 | P0 | 隔離し削除してよいQA user、ST-09のoffline queue | consent/pause/deletion/epoch/export/public/cache/称号 | S13、R16/17、D10～14/D24、G09 |
 | ST-11 | P0/P1 | 隔離PG database、検証配備のbackup/runbook | populated migration、失敗復旧、実dump/restoreと最新safety適用 | D11/12/19、G08～10 |
-| ST-12 | P2 | 機能ST合格、端末/履歴件数/ネットワークを固定 | p95/scroll/電池/静読/大文字/UIと自己利用の評価 | N11/12、S03/11、R08～11、D07、G06/G08/G10 |
+| ST-12 | P2 | 機能ST合格、実機1台、端末/履歴件数/ネットワークを固定 | p95/scroll/電池/静読/大文字/UIと3〜7日の自己利用評価 | N11/12、S03/11、R08～11、D07、G06/G08/G10 |
 | ST-13 | P0 | 上記結果と最終SHA/artifactが確定 | 必須suite、70行/G00～10、配布物対応を照合し判定 | 全ケース、G00～10 |
 
 ## 先行確認済みの範囲
@@ -136,7 +157,7 @@ migration途中失敗・DB接続失敗を注入し、書込みを止めた状態
 
 local PG/HTTP TestClientの500session条件では個人画面p95最大219.73msを確認済み。次はTLS/WAN/並行負荷と実端末で検索response/体感待ち、tracker抽出/scroll、長段落/5000chunk、複数端末、replay個人画面APIを測る。cache hit API p95 500ms未満は設計上の目標であり、件数・履歴量・DB/CPU/network・warmup・並行数・sample数を固定したreportで判定する。Wの2ページ抽出26.8/38.5msやlocal API測定だけをWAN性能やmobile電池保証に使わない。
 
-大文字、dark、遅回線、background、静読70秒、短い記事、数式/表/箇条書き、モバイル折りたたみを含める。idle60秒による過小評価と分割読書の限界を説明し、理解できたか/読書を妨げたかを記録する。一週間程度の自己利用は候補期間で、実際の開始/終了/利用回数/未利用日を記す。閾値を変える場合は新policy versionとして別検証し、旧履歴へ無言適用しない。
+大文字、dark、遅回線、background、静読70秒、短い記事、数式/表/箇条書き、モバイル折りたたみを含める。idle60秒による過小評価と分割読書の限界を説明し、理解できたか/読書を妨げたかを記録する。自己利用は実機1台で3〜7日とし、実際の開始/終了/利用回数/未利用日を記す。閾値を変える場合は新policy versionとして別検証し、旧履歴へ無言適用しない。
 
 ## ST-13: 最終照合と終了条件
 
