@@ -1,0 +1,22 @@
+{
+  "result": "pass",
+  "verified_at": "2026-10-04T12:25:35.299Z",
+  "identity": "synthetic QA identity; real provider OAuth not tested",
+  "metadata": "real MediaWiki; isolated live QA database without synthetic readings",
+  "transport": "Android emulator -> FastAPI -> PostgreSQL -> installed Chrome Dashboard",
+  "readings": [
+    {
+      "wiki": "jawiki",
+      "page_id": 2460204,
+      "activities": 1,
+      "active_ms": 20993
+    },
+    {
+      "wiki": "enwiki",
+      "page_id": 9228,
+      "activities": 1,
+      "active_ms": 20991
+    }
+  ],
+  "browser_errors": 0
+}

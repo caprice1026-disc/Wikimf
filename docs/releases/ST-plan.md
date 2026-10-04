@@ -49,13 +49,17 @@ P0は閉じた検証の縦断確認と漏洩・二重計上・削除復活の防
 
 | ST | 確認済みの範囲 | 残る範囲 |
 |---|---|---|
-| ST-05 | API35で明示native focus回帰1件、persistence/Keystore2件、実Overview/PrivacyのIntent1件。Search→ReaderのURL/scroll1800/history/session維持、fragment同session、回転後位置/履歴とnative前後移動、Home後12秒active不変。[Android証跡](../../apps/android/VERIFICATION.md) | 物理端末、OS back/無効境界、外部/new-window/SSL/renderer、Chrome初回画面以後、文字サイズ/lock/kill。回転時はsession再作成を観測したためreload/二重計上条件も残る。 |
+| ST-05 | API35でfocus/Keystore/管理Intent、Search往復、fragment、回転位置/履歴/前後移動、Home後active不変。最新のOS back/初期無効/外部確認/font/lock/kill/renderer復旧はAndroid Phase 1追加行を参照。[Android証跡](../../apps/android/VERIFICATION.md) | 物理端末、SSL、外部ブラウザでの実ログイン、secure lock、大文字の視認性。回転時はsession再作成を観測したためreload/二重計上条件も残る。 |
 | ST-07 | 実Chrome/エミュレータ→実API/PG→同ownerの刷新後Dashboardで16 checks。両sourceの正の活動とsource別表示件数のAPI一致を確認。[dashboard-redesign-api.json](evidence/dashboard-redesign-api.json) | identity/metadataは合成。実provider/実metadata、host閾値直前直後、両端末同時区間、DST等を追加。 |
-| ST-08/09 | 実Chrome worker stop/restart、tab arbitration、offline保存/個別ACK。最終strict schema2件accepted、10,001ms増。[chrome-postgres.json](evidence/chrome-postgres.json)。Android実offline2件→復旧0、累計81,821ms、非隔離。[offline-observation.json](../../apps/android/verification/offline-observation.json) | Android force-stop/reboot、ACK responseのみ紛失、queue容量/実disk障害、実複数window/OS focus、削除/re-link等。 |
+| ST-07追加 | Androidの日英実記事→実MediaWiki→実API/PG→同ownerの実Chrome Dashboardを確認。JA地球20,993ms、EN Earth20,991ms、browser error0。[実測](evidence/android-live-dashboard.json) | この追加経路はidentityだけ合成。実provider/HTTPS/物理端末、両hostの同時利用は後続。 |
+| ST-08/09 | 最新実Chromeのdeveloper unpacked9判定、worker stop/restart、tab arbitration、offline保存/個別ACK。実API/PGへ2件accepted、10,015ms増。[Chrome証跡](evidence/emulator-tracker-chrome-verification.json)。Androidのprocess/force-stopと背景同期はPhase 1追加行を参照 | 実機rebootと認証保持、ACK responseのみ紛失、実disk障害、実複数window/OS focus、実provider下のre-link等。 |
 | ST-09/10追加 | Chrome容量/期限エラーからの再開12判定、Androidの期限/epoch/削除/拒否payload消去・診断100件上限・同意OFF時のURL送信停止を確認。[追加検証](issue-fixes-dashboard.md) | 実disk障害、物理端末での同意/再開、実provider/HTTPS下の削除・復旧を追加。 |
+| Android Phase 1追加 | 最終Native11/JVM10成功。約142秒freezeで読書時間を保持し、復帰後41,237msを実API受理、HomeのままWorker ACK/queue0。process/force-stopの永続化、削除epoch、実renderer retry、日英検索、font再生成、外部リンク/OS backを確認。[集計](../../apps/android/verification/emulator-st-summary.json) | identityは合成。実HTTPS/OAuth、物理端末、PIN/生体認証lock、実429画面、SSLエラー等の未確認条件は集計のremaining_stと実機方針に従う。 |
+| Android Phase 2 | ST鍵の署名release APKを別AVDへ入れ、日英ゲスト閲覧/HTTP拒否/再起動/同じAPK更新の履歴・設定保持を確認。前後APK hash一致。[集計](../../apps/android/verification/release-emulator-summary.json) | 実HTTPSでのrelease token/Keystore/同期、異なるversion間更新、通常user OS上のWebViewデバッグ無効は未確認。今回のuserdebug OSはDevToolsを強制有効にする。 |
 | ST-11 | 保持データ0002→0004 migration、実pg_dump/pg_restoreと最新safety適用の14 checks。[issues-14-18-recovery.json](evidence/issues-14-18-recovery.json) | migration失敗、検証配備先でのbackup運用/復旧時間とreplay照合。 |
-| ST-12 | local PG、500session/event/interval、warmup3、各30 requests、HTTP TestClientのp95最大219.73msで500ms目標をこの条件では満たした。[performance.json](evidence/performance.json) | TLS/WAN/並行負荷、物理端末電池/体感、静読/分割読書、一週間程度の利用評価。 |
+| ST-12 | local PG、500session/event/interval、warmup3、各30 requests、HTTP TestClientのp95最大219.73msで500ms目標をこの条件では満たした。[performance.json](evidence/performance.json) | TLS/WAN/並行負荷、物理端末電池/体感、静読/分割読書、実機1台で3〜7日の利用評価。 |
 | ST-13 | 追加修正source `dd575fb3362a43ca00043248bddf9dcca190c385`で[remote CI全4job成功](https://github.com/caprice1026-disc/Wikimf/actions/runs/37196169054)。PG95/JVM10/Native8+pairing1と[3artifactのmanifest](evidence/issues-artifact-manifest.json)を固定。[画面刷新と追加検証](issue-fixes-dashboard.md)を参照 | 実環境のST結果を追加し、公開配布source/hashを再照合してG10を判定。CIに実OAuth/実browser/emulator instrumentationは含まれない。 |
+| ST-13追加 | 最新source `87ad275e62ddba6a83d8467b0ab58e568bbad5ad`の[CI全4job成功](https://github.com/caprice1026-disc/Wikimf/actions/runs/37204922058)。tracker14/拡張12、Native11、debug/release JVM各10件を確認し、[ST署名APK manifest](evidence/android-st-artifact-manifest.json)へ固定 | 実機/HTTPS/OAuth/3〜7日の結果と正式公開対象を別途照合する。 |
 
 ## ST-01: provider登録
 
@@ -86,7 +90,7 @@ Issue #18で追加した本人確認も同じ実providerで検証する。10分�
 
 ## ST-04: 配布物・署名・更新
 
-運用者がAndroid application ID、version、署名鍵の保管/backup、閉じたAPK配布かStore方式かを固定する。現在の`org.wikimf.reader`/debug keyは開発用で、release署名は未実施。releaseのAPI URLを設定しdebuggable/WebView debugging/cleartext例外を検査する。署名APK/AABの証明書digestを記録し、鍵/passwordはartifactへ含めない。[Android署名](https://developer.android.com/studio/publish/app-signing)
+運用者が正式公開時のAndroid application ID、version、署名鍵の保管/backup、閉じたAPK配布かStore方式かを固定する。今回のST releaseは`org.wikimf.reader`を使い、debug鍵と分離したST鍵で署名した。[APK/source/hashと手順](android-device-ST.md)を参照する。実API URLは用意後にAccountで設定し、debuggable/WebView debugging/cleartext例外を有効にしない。署名証明書digestを記録し、鍵/passwordはartifactへ含めない。[Android署名](https://developer.android.com/studio/publish/app-signing)
 
 同じ署名・application IDで旧版→新版を更新し、owner/device/consent/暗号化credential/SQLite queue/履歴が意図どおり残ることを確認する。初回install、失効→再連携、別account、アンインストール前の未送信説明も確認する。debug署名版から異なるrelease署名版へ上書きできると仮定しない。
 
@@ -96,7 +100,7 @@ Issue #18で追加した本人確認も同じ実providerで検証する。10分�
 
 ## ST-05: Android Readerとfocus/lifecycle
 
-API35 emulatorを先行し、物理端末で後日同じ操作を繰り返す。OS/API、WebView package/version、画面幅、IME、APK hashを記録する。linked QA userでクラウド収集とnative cloud consentをそれぞれONにし、実日英記事を開く。
+API35 emulatorで機能確認を先行し、物理端末では上記の重点項目と実環境の縦断を確認する。OS/API、WebView package/version、画面幅、IME、APK hashを記録する。linked QA userでクラウド収集とnative cloud consentをそれぞれONにし、実日英記事を開く。
 
 Native SearchからReaderへ戻った際のfocus復帰、同session/位置維持はAPI35で確認済み。専用[ReaderFocusRegressionTest](../../apps/android/app/src/androidTest/java/org/wikimf/reader/ReaderFocusRegressionTest.kt)も`native_smoke=true`を明示し実APIのそのsessionで10秒以上の正activeを確認した。物理端末と関係する変更後にもこの経路を確認する。共通coreのfocus条件を弱めて合格にしない。通常instrumentationの`OK (3 tests)`に含まれたskipをこの縦断の合格にしない。
 

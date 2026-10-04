@@ -15,11 +15,17 @@
 | A3 | [ReaderFocusRegressionTest.kt](../../apps/android/app/src/androidTest/java/org/wikimf/reader/ReaderFocusRegressionTest.kt)、[native-smoke.txt](../../apps/android/verification/native-smoke.txt)、[native-final-suite.txt](../../apps/android/verification/native-final-suite.txt)、[native-e2e.json](../../apps/android/verification/native-e2e.json) | focus単独26.046秒、OK(1 test)。その後の最終debug APKでは明示Native suite全4件が28.407秒で成功。API35/WebView124.0.6367.219で実Earth DOM→実API/PGの縦断例4session（viewed2/partial2、active最大120,629ms、quarantine=false）。Accountで12秒待ってactive44,980ms→44,980ms。identity/metadataは合成。通常実行のskipは合格に含めない。 |
 | A4 | [offline-observation.json](../../apps/android/verification/offline-observation.json)、[lifecycle-observations.json](../../apps/android/verification/lifecycle-observations.json)、[lifecycle-summary.json](../../apps/android/verification/lifecycle-summary.json)、[background-pause.json](../../apps/android/verification/background-pause.json)、[Android検証記録](../../apps/android/VERIFICATION.md) | 同じdebug APK/API35エミュレータで実操作、lifecycle summaryの8条件がtrue。offline queue2件→online後0、accepted累計81,821ms、quarantine=false。Search往復でEarth URL/scrollY1800/history/session維持、fragment同session、native前後移動、回転後Moon位置/履歴維持を確認。回転ごとにsession再作成を観測。Home後12秒のactive34,989ms→34,989ms。 |
 | A5 | [DashboardUrls.kt](../../apps/android/app/src/main/java/org/wikimf/reader/DashboardUrls.kt)、[DashboardLinkIntegrationTest.kt](../../apps/android/app/src/androidTest/java/org/wikimf/reader/DashboardLinkIntegrationTest.kt)、[dashboard-intents.txt](../../apps/android/verification/dashboard-intents.txt)、[dashboard-links.json](../../apps/android/verification/dashboard-links.json) | 実`/config`からDashboard originを取得しdebug emulator用10.0.2.2:5173へ保存。実ComposeボタンのACTION_VIEWでOverview `/app` とPrivacy `/app/settings/privacy`を捕捉し5.356秒、OK(1 test)。実Chrome handoffは別途確認し、Chrome初回画面の先の表示はST-05。記事/承認URLはA1で検査。 |
+| A6 | [実MediaWiki resolver](evidence/emulator-live-resolver.json)、[実Android→Dashboard](evidence/android-live-dashboard.json)、[実画面](evidence/android-live-dashboard.png)、[照合runner](../../apps/dashboard/scripts/android-live-smoke.mjs) | 専用PGで合成記事/読書イベントをseedせず、実APIがJA地球page_id2460204/EN Earth9228を取得。Androidの読書20,993ms/20,991msを同ownerの実Chrome Dashboardで確認、browser error0。identityのみ合成で実OAuthは未確認。 |
+| A7 | [NativeSearchUiRegressionTest.kt](../../apps/android/app/src/androidTest/java/org/wikimf/reader/NativeSearchUiRegressionTest.kt)、[日英検索UI結果](../../apps/android/verification/emulator-live-search-suite.txt) | API35実Compose UIで日英候補、候補のみ履歴差分0、選択後のURL/DOM識別と履歴、再選択の重複抑止/先頭化、入力クリア時の二種履歴、OS backを確認。既存履歴を消さず、専用QA ownerと明示flagを要求する。 |
+| A8 | [追加ST集計](../../apps/android/verification/emulator-st-summary.json)、[最終Native11件](../../apps/android/verification/emulator-final-native-suite.txt)、[元設定の復元](../../apps/android/verification/emulator-preferences-restored.json) | Native11/JVM10成功、skip0。約142秒freezeで20,339ms保持、復帰後41,237msを実APIが受理し、HomeのままWorker ACK/queue0。process kill/force-stopのpayload不変、font1.3で位置保持、記事/epoch削除の復活なし、実renderer crash後に同記事で再開。元の暗号化設定・履歴を保持。署名release版は[実機ST手順](android-device-ST.md)へ記録。 |
+| A9 | [ST署名APK manifest](evidence/android-st-artifact-manifest.json)、[releaseエミュレーター集計](../../apps/android/verification/release-emulator-summary.json) | source87ad275のrelease単体10件、署名/manifest検査成功。同APKを別AVDでinstallし、日英ゲスト閲覧、HTTP拒否、再起動/同APK更新の設定・履歴保持、hash不変を確認。userdebug OSによるDevTools強制有効を記録し、通常user OSの無効確認と実HTTPS/release認証縦断は実機STに残す。 |
 | T | [tracker.js](../../packages/tracker/tracker.js)、[android-adapter.js](../../packages/tracker/android-adapter.js)、[ADR](../adr/0001-mvp-contract.md) | 同一JS core。NFC code point/空白除外、200文字chunk、50%可視累計2秒、idle60秒、tick gap>2秒を除外、10秒保存。v1係数は精度の実測保証ではない。 |
 | T1 | [tracker.test.js](../../packages/tracker/test/tracker.test.js)、[outbox.test.js](../../apps/extension/test/outbox.test.js) | Node 16件合格（tracker9＋拡張7）。`node --test --experimental-test-isolation=none packages/tracker/test/tracker.test.js apps/extension/test/outbox.test.js`。URL・本文・状態境界・clock/focus・queue・senderを固定入力で確認。 |
+| T2 | [長停止のBackend契約照合](evidence/emulator-tracker-contract.json)、[最新版suiteとsource hash](evidence/emulator-tracker-chrome-verification.json) | 最新tracker14件・拡張12件が成功、skip0。98秒停止前の未保存span/累計/coverage/seqを保全し、60秒境界とwall/monoの時差も確認。生成5ケース19イベントを実Backendモデルが受理し、矛盾判定0。 |
 | C | [content.js](../../apps/extension/src/content.js)、[worker.js](../../apps/extension/src/worker.js)、[outbox.js](../../apps/extension/src/outbox.js)、[popup.js](../../apps/extension/src/popup.js) | MV3、sole focused active tab、trusted sender/storage、owner/device不変queue、個別ACK、retry/control、browserによる端末連携。 |
 | C1 | [chrome-smoke.js](../../apps/extension/test/chrome-smoke.js)、[chrome-fixture.json](evidence/chrome-fixture.json) | 実Google Chrome 154.0.8037.93、専用profile、developer unpacked ID `icjoefpaliiipmidoabflongnndnpmma`。9 checks合格: DOM、content isolation、popup、tab切替、offline永続化、実worker stop/restart、個別ACK。APIはfixture。 |
 | C2 | [backend-chrome.js](../../apps/extension/test/backend-chrome.js)、[chrome-postgres.json](evidence/chrome-postgres.json) | 同版の実Chrome、ID `ghkjhcphlkmllnnihmmjokodkdncocdp`、実FastAPI/PG。端末grant作成→pending→Web明示承認→exchange、実tracker2イベントaccepted、1session、active 10,001ms増、queue0。identityと記事metadataは合成。実OAuthの代替ではない。 |
+| C3 | [最新版Chrome fixture](evidence/emulator-tracker-chrome-fixture.json)、[最新版Chrome→PG](evidence/emulator-tracker-chrome-postgres.json) | 長停止修正後の同shared sourceで実Chrome154のdeveloper unpacked 9判定成功。実API/PGへの端末連携・2ACK accepted・active10,015ms増・queue/隔離0。sourceと全生成bundleのhash一致。identity/metadataは合成。 |
 | W | [live-wikipedia.js](../../packages/tracker/test/live-wikipedia.js)、[live-wikipedia.json](evidence/live-wikipedia.json) | 実Chromeで本家JA「地球」/EN「Earth」の現在DOMを抽出。16,290/48,352文字、133/296chunk、38.5/26.8ms、infobox由来chunk0。read-onlyであり、この2記事のクラウド記録の証跡ではない。 |
 | B | [main.py](../../apps/backend/wikimf/main.py)、[auth.py](../../apps/backend/wikimf/auth.py)、[articles.py](../../apps/backend/wikimf/articles.py)、[ingest.py](../../apps/backend/wikimf/ingest.py)、[projection.py](../../apps/backend/wikimf/projection.py) | `/api/v1`、User行lock、immutable events/正規化interval、replay、記事ID検証、owner/CSRF/scope、削除marker/epoch、独立公開response、no-store。 |
 | B1 | [test_mvp.py](../../apps/backend/tests/test_mvp.py)、[test_auth_flow.py](../../apps/backend/tests/test_auth_flow.py)、[test_recovery.py](../../apps/backend/tests/test_recovery.py)、[test_resolver.py](../../apps/backend/tests/test_resolver.py)、[conftest.py](../../apps/backend/tests/conftest.py)、[最終PGログ](evidence/backend-postgres.txt) | 実PostgreSQL 17.6で75件合格、failure/error/skip 0。認証9件、resolver18件、16同時再送と削除競合、clock-skew削除再送、不正Unicode item混在、identity復元、別session coverage非合成、3ID不一致、同UUIDのuser分離を含む。fixture metadata/provider adapterによる入力で、外部providerの署名・実認証は未確認。SQLite成功だけをPG証跡にしない。 |
@@ -30,40 +36,40 @@
 | P | [performance.json](evidence/performance.json) | Windows/PG17.6、1user/1article/500session・event・interval、warmup3、各endpoint30 requests。in-process HTTP TestClientでp95はresolver3.33、articles130.29、activities163.11、stats219.73ms。500ms目標をこの条件で満たした。TLS/WAN/実端末の負荷ではない。 |
 | I | [GitHub Actions run 37157922359](https://github.com/caprice1026-disc/Wikimf/actions/runs/37157922359)、[配布manifest](evidence/artifact-manifest.json) | source `51d3360da45459aabc61643d4cc74a164de0f556`のbackend/dashboard/tracker-extension/android全4jobがsuccess。PG75件・schema/migration、Dashboard unit/build、tracker/拡張unit/build、Android JVM10件/build/lint。実browser/emulator instrumentation・実OAuthはこのCIの対象外。debug APKと拡張/Dashboard ZIPのhash/build内容を固定済み。 |
 
-上記`evidence/`とAndroid`verification/`には匿名化したreport/画像を保存した。追加修正後の最終SHA/artifactとの対応はリリース記録で確認する。`.tmp/backend-smoke.json`などの資格情報ファイルは証跡へ添付しない。エミュレータ代替は今回のユーザー指示に基づく。物理Android、実provider資格情報、HTTPS配備先、release署名は後日STへ残す。
+上記`evidence/`とAndroid`verification/`にはQA report/画像を保存した。追加修正後の最終SHA/artifactとの対応はリリース記録で確認する。`.tmp/backend-smoke.json`などの資格情報ファイルは証跡へ添付しない。ST専用署名release APKを作成済みで、物理Android、実provider資格情報、HTTPS配備先、正式公開用の鍵・配布は後日STへ残す。
 
 ## Reader / Navigation（14件）
 
 | ケース | 期待する結果 | 実装 | 実行済みの確認 | 判定と残るST |
 |---|---|---|---|---|
-| N01 | 日本語本家記事、正しいwikiへ記録 | A、AS、T、B | Wの日本語本家DOM、C2のjawiki実PG記録。Android本家表示とbridgeはエミュレータで調査 | 一部。ST-05/07でAndroid JA検索→閲覧→Dashboardを保存。 |
-| N02 | 英語本家記事、正しいwikiへ記録 | A、AS、T、B | Wの英語本家DOM、B1のenwiki識別、A3の実Earth→API/PG正active、U2の同owner Dashboard表示 | エミュレータ/API/UI確認。実metadata/Chrome EN記録一式はST-07。 |
-| N03 | 前後移動とボタン状態一致 | A | A4のnative Earth→Moon→back Earth→forward Moon、回転後も往復/履歴維持 | エミュレータの前後移動確認。ボタン無効境界・3記事・OS backはST-05。 |
-| N04 | 履歴なしの前後無効、上部backで終了しない | A | 無効条件と上部操作の実装を確認 | ST。ST-05で初回/履歴末端/OS backとの違いを操作。 |
+| N01 | 日本語本家記事、正しいwikiへ記録 | A、AS、T、B | A6でAndroid実地球→実MediaWiki metadata→実API/PG→同owner Dashboard、20,993msのviewedを確認 | エミュレーターの実記事縦断確認。実OAuth/HTTPS/物理端末はPhase 4。 |
+| N02 | 英語本家記事、正しいwikiへ記録 | A、AS、T、B | A6でAndroid実Earth→実MediaWiki metadata→実API/PG→同owner Dashboard、20,991msのviewedを確認 | エミュレーターの実記事縦断確認。実OAuth/HTTPS/物理端末とChrome EN記録一式はST-07。 |
+| N03 | 前後移動とボタン状態一致 | A | A4のnative Earth→Moon→back Earth→forward Moon、回転後も往復/履歴維持。A8で初期履歴なしの前後無効とOS backを確認 | エミュレータ確認。3記事と物理端末の境界はST-05。 |
+| N04 | 履歴なしの前後無効、上部backで終了しない | A | A8で初期履歴なしの前後無効、OS backはLauncherへ移ることを実操作で確認 | 初期境界確認。3記事の履歴末端と物理端末はST-05。 |
 | N05 | アンカーで記事数/sessionを増やさない | A、T、C | T1のfragment除外、A4のEarth#Physical_characteristicsで同session・scroll1800維持 | エミュレータの同Document確認。記事数差分とChrome fragment往復はST-05/08。 |
-| N06 | 外部HTTPSへ外部browser、計測停止 | A、T | A1のexternal分類、host/lifecycle停止実装 | 一部。ST-05でgesture付き外部リンクと復帰時の区間を確認。 |
+| N06 | 外部HTTPSへ外部browser、計測停止 | A、T | A1のexternal分類。A8で実gesture付き外部リンクの確認画面と取消後の記事保持 | 一部。外部browserへの遷移完了と復帰時の区間はST-05。 |
 | N07 | 偽host/userinfoでReader/bridgeを越えない | A、T、C | A1/T1/B1のURL検査、C1のcontent資格情報アクセス拒否 | 下位層確認。ST-05/08で実遷移・iframeにbridge/tokenがないことを確認。 |
-| N08 | javascript/file/任意Intentを外部起動口にしない | A | A1のscheme拒否、external起動のallowlist | 下位層確認。ST-05でリンク・新window・共有入力から同じ拒否を確認。 |
-| N09 | 新windowもURL検査し一つのReaderまたは外部へ | A | temporary bridge-free WebView→分類→destroyの実装を確認 | ST。ST-05でtarget=_blank、無人popup、不許可URLを操作。 |
+| N08 | javascript/file/任意Intentを外部起動口にしない | A | A1のscheme拒否、A8で実intentリンクの拒否文言を確認 | 一部。javascript/fileと共有入力の実操作はST-05。 |
+| N09 | 新windowもURL検査し一つのReaderまたは外部へ | A | A8でgesture付きtarget=_blankも外部確認画面へ進み、取消後の記事を保持 | 一部。無人popup、不許可URLの組合せはST-05。 |
 | N10 | Account往復で位置/履歴維持、時間除外 | A、T | A3のAccount滞在12秒でactive増分0。A4のReader/Search往復ではURL/scroll1800/history/session維持、focus復帰 | 一部。ST-05でAccount往復の位置/前後履歴も明示照合。 |
-| N11 | 回転/文字サイズで不要reload/二重sessionなし | A、T | A4のlandscape/portraitでMoon位置1030.545と履歴維持、回転後のnative前後移動を確認。Activity再作成ごとに新sessionを観測 | 一部。位置/履歴復元はエミュレータ確認。session再作成のreload/二重計上条件と文字サイズはST-05。 |
-| N12 | プロセス終了後は新session、停止時間除外 | A、AS、T | T1のgap除外、A2のqueue再open | 一部。ST-05/09でforce-stop→復帰→再送を行い、停止時間と新sessionを照合。 |
+| N11 | 回転/文字サイズで不要reload/二重sessionなし | A、T | A4の回転後の位置/履歴/前後移動、A8のfont1.0→1.3でEarth位置1800/履歴2を保持。Activity再作成ごとに新sessionを観測 | 位置/履歴復元を確認。reload/二重計上条件と実機の大文字layoutはST-05。 |
+| N12 | プロセス終了後は新session、停止時間除外 | A、AS、T | A8でprocess kill/force-stopを越えて同じqueueを保持し、再生成後は新session。142秒freezeはgap加算0、後続API ACK/queue0 | エミュレータ確認。物理端末のOS kill/電池制御とrelease認証情報はPhase 5。 |
 | N13 | 別hostの画像表示を保ちbridgeを公開しない | A | top-frame origin限定とサブリソース非遮断。A1のsubframe拒否 | 一部。ST-05でWikimedia画像・CSS表示とsubframe listener不存在を確認。 |
-| N14 | SSLエラー/renderer停止で安全停止、再試行 | A | SSL cancel、onRenderProcessGone→stop/destroy/retryの実装 | ST。ST-05でテスト証明書エラーとrenderer killを注入し未計測区間を確認。 |
+| N14 | SSLエラー/renderer停止で安全停止、再試行 | A | A8で実renderer crash→native retry→元のEarthを再読し新session。新WebViewのscroll0/履歴1を観測 | renderer復旧確認。SSLエラー注入はST-05。 |
 
 ## Search（14件）
 
 | ケース | 期待する結果 | 実装 | 実行済みの確認 | 判定と残るST |
 |---|---|---|---|---|
-| S01 | 空入力で閲覧/検索の2履歴 | A、AS | owner/language別の2履歴実装、A2のowner分離 | 一部。ST-06で同意前後、空入力、両履歴の表示順/20件を確認。 |
+| S01 | 空入力で閲覧/検索の2履歴 | A、AS | A7の空入力/クリア後の二種履歴、A2のowner分離 | エミュレーターで表示確認。同意前後と20件上限のUI照合はST-06。 |
 | S02 | 1文字でdebounce後候補 | A、AS | 300ms debounceと世代/キャンセル実装 | ST。ST-06で日英1文字・連打時の画面とリクエスト数を記録。 |
 | S03 | 日本語IME変換中の連続問い合わせ抑制 | A | input.composition中の抑制実装 | ST。ST-06で実IMEの未確定→確定、削除、言語変更を操作。 |
 | S04 | Enter/IME検索で本文検索 | A、AS | candidate/title検索とfull/page検索の分岐実装 | ST。ST-06でEnter/検索キーと候補にない本文語を確認。 |
-| S05 | 候補から正しい記事へ | A、AS | A4のNative検索からEN Earth/Moonへ遷移し実URL表示を確認 | 一部。ST-06で候補/本文結果の区別、JA/EN同名候補と実resolver IDを照合。 |
-| S06 | 候補表示だけでは検索履歴を作らない | A、AS | rememberを選択時だけ呼ぶ実装 | ST。ST-06で候補表示→閉じる→再openし履歴差分0を確認。 |
-| S07 | 結果から開いた記事を検索履歴へ | A、AS | onChoose時のsearched履歴実装、A2の保存基盤 | 一部。ST-06で再選択が先頭へ移動し重複しないことも確認。 |
+| S05 | 候補から正しい記事へ | A、AS | A7の日英候補選択後の実Reader URL/DOM page ID、A6の実resolver IDとDashboard | エミュレーターの日英候補確認。本文検索の操作はST-06。 |
+| S06 | 候補表示だけでは検索履歴を作らない | A、AS | A7の日英候補表示だけではsearched差分0、クリア後も不変 | エミュレーター確認。物理IME操作はPhase 5。 |
+| S07 | 結果から開いた記事を検索履歴へ | A、AS | A7の選択後searched/viewed保存、再選択で重複せず同言語履歴の先頭へ移動 | エミュレーター確認。物理端末での使用感はPhase 5。 |
 | S08 | 言語変更後、古い応答で上書きしない | A、AS | A1のSearchGate旧言語/full/cancel拒否 | 下位層確認。ST-06でHTTP応答を逆転しUIが最新世代のままか確認。 |
-| S09 | 0件と通信エラーを区別 | A、AS | loading/empty/errorの分離実装 | ST。ST-06で実0件とmock 500を出し文言/再試行を保存。 |
+| S09 | 0件と通信エラーを区別 | A、AS | A8で実0件、offline検索エラー、通信復帰後のretryと履歴不変を確認 | エミュレータ確認。HTTP500注入はST-06。 |
 | S10 | offline/429でも履歴選択・retry/抑制 | A、AS | A1でRetry-After秒値/date/不正時30秒、wiki別process期限と最新世代を確認。検索待機/HTTPのcancel、履歴選択/error/retryを実装 | 下位層確認。ST-06で実HTTP429注入、待機中の入力/言語/画面再open、offline履歴選択・復帰を照合。 |
 | S11 | 説明なし/長いtitleでも崩れない | A | description fallbackとCompose wrap実装 | ST。ST-06でnative検索の狭幅/大文字サイズを確認。U1の長titleはDashboardだけの証跡。 |
 | S12 | HTML excerptを実行せずテキスト表示 | A、AS | excerptのHTML除去→Compose Text実装 | ST。ST-06でscript/img/onerror入りfixtureを表示し実行0を確認。 |
@@ -79,7 +85,7 @@
 | R03 | active30秒＋必要coverでpartial | T、B | T1/B1の30秒/cover境界、A3の44,980msと120,629msでpartial | 判定/エミュレータ確認。ST-07で実可視chunkと30秒前後を照合。 |
 | R04 | 80%cover＋必要時間でcompleted | T、B | T1/B1の79,999/80,000ms固定入力 | 判定層確認。ST-07で日英双方の閾値前後とspeed capを確認。 |
 | R05 | End jumpで中間chunkをcoverしない | T | T1の未表示jump、実Rect/サンプル間の可視継続判定 | 下位層確認。ST-08で実Chrome End→末尾2秒のcovered IDsを照合。 |
-| R06 | idle/sleep/lockの条件外時間なし | A、T、C | T1のfocus/idle/gap/clock、C1のactive tab切替、A4のHome background12秒でactive増分0/復帰同session | エミュレータbackground確認。実OS sleep/lockとclock/gapの端末実操作はST-05/08。 |
+| R06 | idle/sleep/lockの条件外時間なし | A、T、C | T2のfocus/idle/gap/clock、C1のactive tab切替、A8で画面OFF/swipe lock中active不変、約142秒freezeの未観測時間を除外 | エミュレータ確認。物理secure lock、OS sleep、実時計変更はST-05/08。 |
 | R07 | Native検索中はvisible WebViewも停止 | A、T | A4の実Search表示でfocus=false、Reader復帰でtrue、同session/位置維持。A3の正active再開 | 一部。停止条件の実画面確認。ST-05/07でSearch滞在中のAPI active増分0も数値照合。 |
 | R08 | 60秒静止の過小評価と説明/再開操作 | A、T、C、U | T1のidle60秒除外、計測限界の説明実装 | 一部。ST-07/12で70秒静読→scroll再開の時系列と理解を記録。 |
 | R09 | 長段落/折りたたみを実viewportで判定 | T | T1の5000chunk近傍計算・collapsed denominator/Rect除外、C1の実DOM | Chrome fixture確認。ST-05/08でモバイル折りたたみ・zoom・再展開を確認。 |
@@ -101,7 +107,7 @@
 | D02 | 同ID内容変更はconflict拒否 | B、AS、C | B1のmax_scroll改変event_conflict、A2のpayload不変 | PG/端末storage確認。ST-09でinterval/document改変も拒否を確認。 |
 | D03 | 逆seq/open/closed欠落でも未着時間補完なし | B | B1のseq3→1で20秒だけ計上、pending、矛盾seq2隔離/再計算 | PG確認。ST-09で実端末配送順を入れ替え表示も確認。 |
 | D04 | ACK紛失の同ID再送はduplicate | B、AS、C | B1のduplicate、T1の未着ACK保持、C1の再送後個別削除 | 部品/実Chrome確認。ST-09でサーバcommit後responseだけ遮断する障害を注入。 |
-| D05 | worker停止/app killでも保存queue保持 | AS、C | C1の実worker停止/復帰、A2の実SQLite再open、A4の実offline2件→online後0/正active/非隔離 | Chrome/storage/エミュレータoffline確認。Android force-stop/reboot後の送信はST-09。 |
+| D05 | worker停止/app killでも保存queue保持 | AS、C | C3の実worker停止/復帰、A8のprocess kill/force-stop後のqueue不変と背景Worker ACK/queue0 | Chrome/エミュレータ確認。物理端末reboot後のrelease認証/queue配送はST-09。 |
 | D06 | PC/Android重複時間をunion | B | B1の60秒＋30秒ずれ60秒→90秒、replay一致（入力は合成端末） | 実PG計算確認。ST-07で実2hostの同時観測を同userへ送る。 |
 | D07 | 同user並列送信の統計一致 | B | B1の実PG8worker/16再送と削除競合、replay2回一致 | PG確認。ST-09/12で異なるevent並行と大量履歴の再計算を測定。 |
 | D08 | revoke/user変更で別userへ送らない | B、AS、C | B1/U2のrevoked token401、A1/A2/T1のowner/device不変 | API/storage確認。ST-09で両hostに旧queueを残したままaccount変更。 |
@@ -126,18 +132,18 @@
 
 | Gate | 現時点の判定 | 根拠と残件 |
 |---|---|---|
-| G00 | 閉じた検証の基盤・remote CI・artifact固定を確認 | ADR/契約/schema/各buildと上記suite。Iの最終配布source全4job success、3artifactのSHA256/build内容/共通tracker一致。HTTPS/署名の環境受入はST-03/04。 |
-| G01 | エミュレータ操作を一部確認 | A1のURL/bridge、A4の前後/fragment/Search往復/回転位置履歴/backgroundを確認。N04/N06～09/N12～14と文字サイズはST-05。物理実機未実施。 |
+| G00 | 閉じた検証の基盤・remote CI・artifact固定を確認 | ADR/契約/schema/各buildと上記suite。最新source87ad275も全4job success、ST署名APKのhash/manifest/共通tracker一致。HTTPS/正式配布の環境受入はST-03/04。 |
+| G01 | エミュレータ操作を追加確認 | A1/A4/A8で前後/fragment/回転/font/OS back/外部確認/process/renderer復旧を確認。SSL、不許可URLの全組合せ、物理端末はST-05。 |
 | G02 | 一部確認 | 検索/履歴実装、SearchGate JVM・SQLite確認。実IME/429/画面順序はST-06。 |
 | G03 | 実provider未確認 | 実API端末grant・承認・exchangeとuser/scope/CSRF、認証9件は確認。実Google/GitHubログイン/identity追加はST-01/02。 |
 | G04 | PG識別/cacheと本家queryを確認 | B1のresolver18件、実MediaWikiの日英query/redirect読取り。上流の記事移動/削除をまたぐ縦断と期限切れcacheはST-07。 |
-| G05 | Android→API/PG→同owner Dashboardをエミュレータで確認 | A3の実Earth DOM/viewed/partial、A4のoffline recovery/停止、U2の同owner表示。time_only障害注入はST-07、物理端末はST-05へ残す。 |
+| G05 | Android→API/PG→同owner Dashboardをエミュレータで確認 | A6の日英実DOM/metadata/正の記録/Dashboard、A8の長停止/Worker復旧/削除epochを確認。time_only障害注入はST-07、物理端末はST-05へ残す。 |
 | G06 | core/API境界確認、host ST残り | T1/B1/U1、W実日英DOM、C1実fixture。モバイル折りたたみ、端末3状態と根拠説明はST-05/07/12。 |
-| G07 | 両host→同owner Dashboard経路を確認 | C1のworker停止/復帰、C2の実tracker→PG、A3/A4のnative実観測、U2の両source表示。identity/metadataは合成。実metadataの縦断一式はST-07。 |
+| G07 | 両host→同owner Dashboard経路を確認 | C3の最新実Chrome→PG、A6/A8のnative実観測、U2の両source表示。Android追加経路は実metadata、Chromeは合成metadata、identityは両者とも合成。実providerと両host同時区間はST-07。 |
 | G08 | 実PGの計算/並行性と限定性能を確認 | B1のunion/逆順/再読/日跨ぎ/replay/並列削除。Pの500session・local TestClient p95を確認。ST-07/09/12で実2host同時区間・DST・TLS/WAN/大量履歴を補う。 |
 | G09 | API/UI/復旧の確認あり、配備cache/端末ST残り | B1/B2、U1/U2、owner storage/epoch確認。両hostの停止/別account/旧queueと実HTTPS cacheはST-03/09/10。 |
-| G10 | 一般公開のリリース判定は保留 | 実装・閉じた検証・source/artifact固定は完了。ユーザーの指示でエミュレータを先行し、実OAuth/HTTPS/署名/物理実機を後日STへ残す。ST-01～13の実環境/利用評価を完了し、公開する配布対象のSHA/artifactを再照合して公開可否を別途判定。 |
+| G10 | 一般公開のリリース判定は保留 | 実装・閉じた検証・ST署名APK/source固定を完了。実OAuth/HTTPS/正式配布/物理実機/3〜7日利用を後日STへ残す。ST-01～13の実環境/利用評価後、公開する配布対象のSHA/artifactを再照合して公開可否を別途判定。 |
 
 ## 実行結果を更新する条件
 
-新しい確認では、ケースID、source SHA、artifact hash、OS/Chrome/WebView/API/PG版、操作、期待値、実際の値、匿名化したreportパスを記録する。合成provider/metadataを置換したかも記す。修正で影響したケースと必須suiteを最終対象で再実行し、失敗/skipは理由を残す。今回のA3は正のactive縦断とAccount停止を確認した範囲だけ更新し、他の未実施STを一括合格にしていない。
+新しい確認では、ケースID、source SHA、artifact hash、OS/Chrome/WebView/API/PG版、操作、期待値、実際の値、QA reportパスを記録する。合成provider/metadataを置換したかも記す。修正で影響したケースと必須suiteを最終対象で再実行し、失敗/skipは理由を残す。今回もA6〜A8等で実測した範囲を更新し、未実施STを一括合格にしていない。

@@ -1,0 +1,106 @@
+{
+  "started_at": "2026-10-04T12:50:12.2629883Z",
+  "completed_at": "2026-10-04T12:53:41.0116702Z",
+  "base_source_sha": "de90fbd649b5c9f4585eb060eb8c0fc932fc96ac",
+  "source_sha_at_completion": "de90fbd649b5c9f4585eb060eb8c0fc932fc96ac",
+  "source_files": [
+    {
+      "path": "packages/tracker/tracker.js",
+      "sha256": "89479f9bb920dffe16d5b50c3b4ab9a82b490dc448aed241bdaf85c3e4fb3cd3"
+    },
+    {
+      "path": "packages/tracker/android-adapter.js",
+      "sha256": "49f29fe07efa877f1f5bb91f19b83d2ec9ecebbdd8983212481c73fb9ac0ad33"
+    },
+    {
+      "path": "packages/tracker/test/tracker.test.js",
+      "sha256": "188d2dab8539bd45acb72a6f5d85c50bdfb96e6ee54cbb159b29b46bb8ac05bc"
+    },
+    {
+      "path": "apps/extension/src/config.js",
+      "sha256": "a5bc00b06f56adbc3194327c5f183616dcce8a1afacb8ed203fdfa5b8f90360f"
+    },
+    {
+      "path": "apps/extension/src/content.js",
+      "sha256": "d257a0e8ee724eef724121169f91eecf65a3eb30f4d615c1737fd5472784f592"
+    },
+    {
+      "path": "apps/extension/src/outbox.js",
+      "sha256": "9008cbc8c030d4cd40e194452413fbd2f7f83f8b7ecb01c3c705879c64b2b5e8"
+    },
+    {
+      "path": "apps/extension/src/popup.css",
+      "sha256": "cacf7eca096287d938ea0f5eca84dc54881cf6f35cfb4b06181442b8813a45cd"
+    },
+    {
+      "path": "apps/extension/src/popup.html",
+      "sha256": "674cafd370c5b3e67e2205b8838c5f65ec2d9e01c15b9f0a0e46963193cbcc49"
+    },
+    {
+      "path": "apps/extension/src/popup.js",
+      "sha256": "cea28aa3ec84058f160f6185b761c58fca97a7ce5dab2a43090b0fe9dfc882e3"
+    },
+    {
+      "path": "apps/extension/src/sync-state.js",
+      "sha256": "91ece5075964799125c199c9b36270cb690156bed05b3c6712e0cc0abe6a636d"
+    },
+    {
+      "path": "apps/extension/src/worker.js",
+      "sha256": "8a7a6239f8df7f62ccce30bebc78e40c5ed90a15cb5c2ca40118848f8a199e19"
+    }
+  ],
+  "source_files_unchanged": true,
+  "bundles": [
+    {
+      "path": "packages/tracker/dist/wiki-tracker.js",
+      "sha256": "4ce8ba422faffd0796c61348b9922798fa6038ada84988f82098385a9aaea73b"
+    },
+    {
+      "path": "apps/extension/dist/wiki-tracker.js",
+      "sha256": "4ce8ba422faffd0796c61348b9922798fa6038ada84988f82098385a9aaea73b"
+    },
+    {
+      "path": "apps/extension/.browser-tests/smoke-extension/wiki-tracker.js",
+      "sha256": "4ce8ba422faffd0796c61348b9922798fa6038ada84988f82098385a9aaea73b"
+    },
+    {
+      "path": "apps/extension/.browser-tests/backend-extension/wiki-tracker.js",
+      "sha256": "4ce8ba422faffd0796c61348b9922798fa6038ada84988f82098385a9aaea73b"
+    }
+  ],
+  "compiled_bundle_matching": true,
+  "node_version": "v22.14.0",
+  "chrome_version": "154.0.8037.93",
+  "tracker": {
+    "tests": 14,
+    "pass": 14,
+    "fail": 0,
+    "skipped": 0,
+    "build": true
+  },
+  "extension": {
+    "tests": 12,
+    "pass": 12,
+    "fail": 0,
+    "skipped": 0,
+    "build": true
+  },
+  "chrome_fixture": {
+    "checks": 9,
+    "all_passed": true,
+    "api_is_fixture": true,
+    "report": "emulator-tracker-chrome-fixture.json"
+  },
+  "chrome_postgres": {
+    "actual_fastapi_postgres": true,
+    "synthetic_identity_and_metadata": true,
+    "accepted_events": 2,
+    "active_ms_added": 10015,
+    "queue_remaining": 0,
+    "report": "emulator-tracker-chrome-postgres.json"
+  },
+  "raw_logs": ".tmp/emulator-tracker-chrome/",
+  "real_provider_login_verified": false,
+  "real_article_metadata_verified": false,
+  "source_identification": "Executed before committing the fixes: base/source_sha_at_completion identify the checkout base, while source_files hashes identify the tested modified working tree. The release manifest records the subsequent committed source."
+}

@@ -1,0 +1,6 @@
+
+org.wikimf.reader.PrivacyRegressionTest:.....
+
+Time: 10.761
+
+OK (5 tests)

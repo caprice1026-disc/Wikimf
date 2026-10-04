@@ -1,0 +1,22 @@
+{
+  "browser": "154.0.8037.93",
+  "extension_id": "cpholajfinhijhiiacimgmgkfbmfbpbk",
+  "actual_fastapi_postgres": true,
+  "synthetic_identity_and_metadata": true,
+  "device_pairing_start_pending_web_approval_exchange": true,
+  "explicit_device_link_terminal_recovery": true,
+  "strict_item_ACK": [
+    {
+      "status": "accepted",
+      "code": null
+    },
+    {
+      "status": "accepted",
+      "code": null
+    }
+  ],
+  "session_count": 1,
+  "active_ms_added": 10015,
+  "article_match": true,
+  "persistent_queue_remaining": 0
+}

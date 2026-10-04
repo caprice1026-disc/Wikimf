@@ -1,0 +1,11 @@
+ST release emulator verification
+APK SHA256 before/after:
+5d976c84e5f877783d8ce26f952251aa30bc6b95ad7c9d61083be48ae59a3e95
+APK bytes: 7347666
+Device: emulator-5556 / API35 / userdebug / WebView124.0.6367.219
+Passed: immutable artifact/signature/embedded tracker; fresh install/launch; guest JA Unicode + EN Earth search/read/scroll; HTTP API URL rejection; guest localConsent and both history lists; process restart; AVD reboot; same immutable signed APK install-r preserves data and advances package update time.
+Manifest/package debuggable=false, cleartext=false, debug network config absent.
+Runtime WebView debug disable is NOT a pass: OS=userdebug (ro.debuggable=1) causes WebView124 debugging regardless of app false request. Read-only /json/version and /json/list returned200 with one guest Wikipedia page target. No CDP connection/page operations or debug setting changes. Temporary forward removed.
+Remaining: real HTTPS/OAuth/device-link/cloud/linked-token Keystore; user OS physical debug disabling; physical-device/network/IME/battery/3-7day ST; different-version upgrade.
+Automation retry: initial Account tap immediately after force-stop/relaunch left Reader visible; original screen retained; check rerun after visible UI passed.
+No emulator-5554 device operations and no source rebuild.

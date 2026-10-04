@@ -1,0 +1,37 @@
+{
+  "product": "wikimf",
+  "version": "0.1.0",
+  "version_code": 1,
+  "created_at": "2026-10-04T13:16:14.362348+00:00",
+  "source_commit": "87ad275e62ddba6a83d8467b0ab58e568bbad5ad",
+  "distribution": "ST-only signed Android release APK; public HTTPS/OAuth and physical-device ST pending",
+  "production_release": false,
+  "application_id": "org.wikimf.reader",
+  "min_sdk": 26,
+  "target_sdk": 35,
+  "build_command": "apps/android/build.ps1 -StagingRelease -Tasks testReleaseUnitTest,assembleRelease,lintRelease",
+  "signing": "local staging PKCS12; separate from debug and eventual production key",
+  "signer_certificate_sha256": "ec08dcc593a05822dbd25d08a712de495b83e0d7fb7a433c1bbd50c56ecb1f84",
+  "debuggable": false,
+  "webview_debugging": false,
+  "cleartext_permitted": false,
+  "r8_enabled": false,
+  "resource_shrinking_enabled": false,
+  "default_api_url": "https://wikimf.example/api/v1",
+  "default_api_is_placeholder": true,
+  "api_configuration": "Set the real HTTPS API /api/v1 URL in Account, then pair and consent",
+  "schema_version": 1,
+  "measurement_policy_version": "reading-v1",
+  "extractor_version": "prose-v1",
+  "tracker_asset_sha256": "c254a5cdd9f4ec4936988c8c42ca4fc94bcd6bdda9666827579b300a50cd32b5",
+  "artifacts": [
+    {
+      "file": "wikimf-0.1.0-staging-release.apk",
+      "bytes": 7347666,
+      "sha256": "5d976c84e5f877783d8ce26f952251aa30bc6b95ad7c9d61083be48ae59a3e95"
+    }
+  ],
+  "webview_debugging_scope": "Application requests false. API35 userdebug OS forces WebView124 DevTools on; effective disabled state on user OS remains physical ST.",
+  "release_emulator_build_type": "userdebug",
+  "release_emulator_debug_diagnosis": "apps/android/verification/release-emulator-debug-diagnosis.json"
+}

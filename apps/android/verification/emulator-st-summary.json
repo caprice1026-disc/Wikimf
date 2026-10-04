@@ -1,0 +1,242 @@
+{
+  "at": "2026-10-04T13:17:18.633986+00:00",
+  "source_commit": "87ad275e62ddba6a83d8467b0ab58e568bbad5ad",
+  "environment": {
+    "serial": "emulator-5554",
+    "android_api": 35,
+    "webview": "124.0.6367.219",
+    "api": "http://10.0.2.2:8002/api/v1",
+    "dashboard": "http://10.0.2.2:5174",
+    "identity": "dedicated synthetic QA identity",
+    "metadata_and_dom": "real JA/EN Wikipedia",
+    "existing_owner_preserved": true
+  },
+  "build": {
+    "result": "PASS",
+    "duration_seconds": 64,
+    "tasks": [
+      "testDebugUnitTest",
+      "assembleDebug",
+      "assembleDebugAndroidTest",
+      "assembleRelease",
+      "lintDebug"
+    ],
+    "test_only_rebuild_seconds": 19,
+    "jvm": [
+      {
+        "class": "org.wikimf.reader.BoundaryTest",
+        "tests": 4,
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0
+      },
+      {
+        "class": "org.wikimf.reader.DashboardUrlsTest",
+        "tests": 3,
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0
+      },
+      {
+        "class": "org.wikimf.reader.SearchCooldownTest",
+        "tests": 3,
+        "skipped": 0,
+        "failures": 0,
+        "errors": 0
+      }
+    ],
+    "lint": {
+      "Error": 0,
+      "Warning": 9
+    },
+    "debug_apk_sha256": "255d0f06e9d43a1b54e3a81e3e3bae3d3a2af926ef1616c0d512a8605e92c7a6",
+    "test_apk_sha256": "7b386e5116f3f641f49d2b3537e0f58ea5771177c76716dd1c543fdd16cc4b6e",
+    "tracker_asset_sha256": "c254a5cdd9f4ec4936988c8c42ca4fc94bcd6bdda9666827579b300a50cd32b5",
+    "tracker_matches_latest_dist": true
+  },
+  "instrumentation": {
+    "status": "PASS",
+    "executed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 72.09,
+    "groups": {
+      "privacy_worker_http": 6,
+      "persistence_keystore": 2,
+      "live_ja_focus": 1,
+      "overview_privacy_intents": 1,
+      "live_ja_en_search": 1
+    },
+    "flags": {
+      "native_smoke": true,
+      "native_dashboard_smoke": true,
+      "native_search_smoke": true,
+      "native_search_owner": "462b15bb-794b-45f5-8cba-3544e72c5478",
+      "dashboard_api_url": "http://10.0.2.2:8002/api/v1",
+      "dashboard_origin": "http://10.0.2.2:5174",
+      "article_url": "https://ja.wikipedia.org/wiki/%E5%9C%B0%E7%90%83"
+    },
+    "qa_pairing_preparation": {
+      "executed": 1,
+      "failed": 0,
+      "status": "PASS",
+      "transport": "Native actual grant start -> Web CSRF approval -> Native exchange"
+    },
+    "earlier_en_focus": {
+      "executed": 1,
+      "failed": 0,
+      "seconds": 25.441
+    }
+  },
+  "checks": {
+    "workmanager_offline_background_recovery": {
+      "status": "PASS",
+      "offline_seconds": 165.393,
+      "recovery_seconds": 19.728,
+      "foreground_opened_before_ack": false,
+      "active_ms": 15546,
+      "queue_rows": 0,
+      "worker_state": "SUCCEEDED",
+      "historical_invalid_event_diagnostics": 1
+    },
+    "screen_off_stop": {
+      "status": "PASS",
+      "active_ms_before": 15000,
+      "active_ms_after": 15000,
+      "observed_seconds": 21.556
+    },
+    "awake_swipe_keyguard_stop": {
+      "status": "PASS",
+      "secure_lock": false,
+      "active_ms": 43984,
+      "unchanged_seconds": 24.909
+    },
+    "process_recreation": {
+      "status": "PASS",
+      "original_immutable_rows_preserved": 3,
+      "late_pause_rows": 2,
+      "url": "https://en.wikipedia.org/wiki/Earth",
+      "scroll_y": 1800,
+      "history_length": 2,
+      "pid_changed": true,
+      "new_session": true,
+      "offline_document_cache": "not implemented; offline recreation shows network error while queue/history survive"
+    },
+    "force_stop_relaunch": {
+      "status": "PASS",
+      "rows_preserved_with_same_sha_owner_device": 5,
+      "online_new_session": true
+    },
+    "font_configuration_recreation": {
+      "status": "PASS",
+      "scale": 1.3,
+      "url_preserved": true,
+      "scroll_y": 1800,
+      "new_session": true
+    },
+    "article_deletion": {
+      "status": "PASS",
+      "queue_rows_after_control": 0,
+      "article_deleted_diagnostics": 2,
+      "deleted_article_absent_from_server": true,
+      "local_history_preserved": true
+    },
+    "all_history_epoch": {
+      "status": "PASS",
+      "epoch_before": 1,
+      "epoch_after": 2,
+      "stale_epoch_diagnostics": 4,
+      "server_articles_activities_after_delete": 0,
+      "queue_rows_after_control": 0,
+      "local_history_preserved": true,
+      "before_queue_snapshot": "empty due asynchronous enqueue; stale cleanup is evidenced by four diagnostics"
+    },
+    "long_frozen_gap_final": {
+      "status": "PASS",
+      "frozen_seconds": 141.977,
+      "session_id": "dfbcbce1-d785-42b8-be87-32f55099edb9",
+      "prefix_seq": 5,
+      "prefix_interval_ms": 11000,
+      "prefix_active_ms_total": 20339,
+      "resumed_seq": 6,
+      "resumed_interval_ms": 56,
+      "resumed_active_ms_total": 20339,
+      "accepted_active_ms": 41237,
+      "valid_intervals_at_most_ms": 60000,
+      "all_prefix_spans_preserved": true,
+      "invalid_event_diagnostic_delta": 0,
+      "queue_rows": 0,
+      "background_worker_ack": true,
+      "protocol_note": "CDP active leaves visibility hidden; actual Home/Reader transition restores visible state"
+    },
+    "renderer_recovery": {
+      "status": "PASS",
+      "actual_crash": true,
+      "native_retry_control": true,
+      "original_url_restored": "https://en.wikipedia.org/wiki/Earth",
+      "page_id": 9228,
+      "new_session": true,
+      "position_after_crash": 0,
+      "history_after_crash": 1
+    },
+    "basic_ui": {
+      "status": "PASS within listed scope",
+      "ja_en_candidate_selection_reselection_empty_history_and_os_back": "11-test final suite",
+      "disabled_initial_history_buttons_and_unmatched_result": "11-test final suite",
+      "offline_error_and_online_retry": "actual native UI; no history added",
+      "empty_navigation_os_back": "actual initial empty history moved task to Launcher",
+      "external_and_new_window_links": "actual user gesture displayed confirmation; cancel retained URL",
+      "intent_scheme": "actual user gesture rejected with native message",
+      "management_buttons": "actual native Overview/Privacy ACTION_VIEW matched 5174/app and 5174/app/settings/privacy"
+    }
+  },
+  "fixed_reproductions": [
+    {
+      "issue": "Long timer freeze produced 97999ms reading interval",
+      "before": "invalid_event diagnostic; excluded from final passing count",
+      "fix": "shared tracker preserves measured prefix and skips unobserved gap; native bridge rejects >60000ms",
+      "after": "positive prefix, valid event sequence, real API ACK and queue0"
+    },
+    {
+      "issue": "renderer retry changed JA article to English homepage",
+      "before": "actual crash/retry reproduced on older APK",
+      "fix": "initialUrl preserves current trusted Reader URL",
+      "after": "actual crash/retry restores Earth and fresh session"
+    },
+    {
+      "issue": "partial ACK and split batches could strand background queue",
+      "fix": "fresh-control bounded drain up to20 batches; progress continues, future/failed retry exits",
+      "regression": "1001 rows leaves1 after bounded run then drains; partial/missing ACK future retry; old-device exclusion;50 terminal URL rows followed by valid row"
+    }
+  ],
+  "cleanup": {
+    "original_preferences_hash_matches": true,
+    "original_encrypted_credentials_hash_matches": true,
+    "keystore_key_preserved_without_uninstall": true,
+    "environment_restored": {
+      "wifi_on": "1",
+      "mobile_data": "1",
+      "font_scale": "1.0",
+      "accelerometer_rotation": "1",
+      "user_rotation": "0",
+      "lockscreen_disabled": "true"
+    },
+    "application_stopped": true,
+    "existing_history_preserved": true,
+    "queue_rows": 0
+  },
+  "remaining_st": [
+    "Production OAuth provider registration and deployed HTTPS cloud E2E",
+    "Signed release APK on one physical device including hardware-backed Keystore and secure PIN/biometric lifecycle",
+    "3-7 days normal use and OEM battery/WorkManager behavior",
+    "Actual injected MediaWiki429 UI (header/deadline/cancellation covered by JVM)",
+    "Small-screen large-font visual quality; SSL error/unsupported WebView bridge environment",
+    "External browser completion beyond captured Intent/confirmation; Chrome first-run not accepted"
+  ],
+  "failed_attempt_logs": [
+    "emulator-final-native-attempt.txt",
+    "emulator-management-harness-attempt.txt",
+    "emulator-live-search-harness-attempt.txt"
+  ],
+  "evidence": "emulator-st-observations.json"
+}

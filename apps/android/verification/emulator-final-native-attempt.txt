@@ -1,0 +1,40 @@
+
+org.wikimf.reader.PrivacyRegressionTest:......
+org.wikimf.reader.PersistenceTest:..
+org.wikimf.reader.ReaderFocusRegressionTest:.
+org.wikimf.reader.DashboardLinkIntegrationTest:
+Error in managementButtonsUseTheConfiguredPublicOrigin(org.wikimf.reader.DashboardLinkIntegrationTest):
+org.junit.ComparisonFailure: expected:<http://10.0.2.2:800[0]/api/v1> but was:<http://10.0.2.2:800[2]/api/v1>
+	at org.junit.Assert.assertEquals(Assert.java:117)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at org.wikimf.reader.DashboardLinkIntegrationTest$managementButtonsUseTheConfiguredPublicOrigin$1.invokeSuspend(DashboardLinkIntegrationTest.kt:26)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:101)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:95)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:69)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:47)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+	at org.wikimf.reader.DashboardLinkIntegrationTest.managementButtonsUseTheConfiguredPublicOrigin(DashboardLinkIntegrationTest.kt:22)
+
+
+Time: 31.464
+There was 1 failure:
+1) managementButtonsUseTheConfiguredPublicOrigin(org.wikimf.reader.DashboardLinkIntegrationTest)
+org.junit.ComparisonFailure: expected:<http://10.0.2.2:800[0]/api/v1> but was:<http://10.0.2.2:800[2]/api/v1>
+	at org.junit.Assert.assertEquals(Assert.java:117)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at org.wikimf.reader.DashboardLinkIntegrationTest$managementButtonsUseTheConfiguredPublicOrigin$1.invokeSuspend(DashboardLinkIntegrationTest.kt:26)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:101)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:95)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:69)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:47)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+	at org.wikimf.reader.DashboardLinkIntegrationTest.managementButtonsUseTheConfiguredPublicOrigin(DashboardLinkIntegrationTest.kt:22)
+
+FAILURES!!!
+Tests run: 10,  Failures: 1

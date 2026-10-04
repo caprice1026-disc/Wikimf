@@ -1,0 +1,23 @@
+
+org.wikimf.reader.NativeSearchUiRegressionTest:
+Error in japaneseAndEnglishSearchPreserveHistoryUntilSelectionAndHandleBack(org.wikimf.reader.NativeSearchUiRegressionTest):
+java.lang.AssertionError: Selection must display the actual jawiki Reader URL
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.wikimf.reader.NativeSearchUiRegressionTest.japaneseAndEnglishSearchPreserveHistoryUntilSelectionAndHandleBack$await(NativeSearchUiRegressionTest.kt:64)
+	at org.wikimf.reader.NativeSearchUiRegressionTest.japaneseAndEnglishSearchPreserveHistoryUntilSelectionAndHandleBack$await$default(NativeSearchUiRegressionTest.kt:58)
+	at org.wikimf.reader.NativeSearchUiRegressionTest.japaneseAndEnglishSearchPreserveHistoryUntilSelectionAndHandleBack$selectedArticle(NativeSearchUiRegressionTest.kt:123)
+	at org.wikimf.reader.NativeSearchUiRegressionTest.japaneseAndEnglishSearchPreserveHistoryUntilSelectionAndHandleBack(NativeSearchUiRegressionTest.kt:177)
+
+
+Time: 34.429
+There was 1 failure:
+1) japaneseAndEnglishSearchPreserveHistoryUntilSelectionAndHandleBack(org.wikimf.reader.NativeSearchUiRegressionTest)
+java.lang.AssertionError: Selection must display the actual jawiki Reader URL
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.wikimf.reader.NativeSearchUiRegressionTest.japaneseAndEnglishSearchPreserveHistoryUntilSelectionAndHandleBack$await(NativeSearchUiRegressionTest.kt:64)
+	at org.wikimf.reader.NativeSearchUiRegressionTest.japaneseAndEnglishSearchPreserveHistoryUntilSelectionAndHandleBack$await$default(NativeSearchUiRegressionTest.kt:58)
+	at org.wikimf.reader.NativeSearchUiRegressionTest.japaneseAndEnglishSearchPreserveHistoryUntilSelectionAndHandleBack$selectedArticle(NativeSearchUiRegressionTest.kt:123)
+	at org.wikimf.reader.NativeSearchUiRegressionTest.japaneseAndEnglishSearchPreserveHistoryUntilSelectionAndHandleBack(NativeSearchUiRegressionTest.kt:177)
+
+FAILURES!!!
+Tests run: 1,  Failures: 1

@@ -1,0 +1,26 @@
+{
+  "result": "pass",
+  "verified_at": "2026-10-04T12:02:46.595187+00:00",
+  "transport": "real FastAPI HTTP -> real MediaWiki API -> PostgreSQL; isolated wikimf_live_smoke database",
+  "identity": "synthetic QA identity only; no real OAuth",
+  "articles": [
+    {
+      "wiki": "jawiki",
+      "page_id": 2460204,
+      "title": "地球",
+      "canonical_url": "https://ja.wikipedia.org/wiki/%E5%9C%B0%E7%90%83",
+      "latest_revision_id": 110745332,
+      "metadata_status": "fresh",
+      "trackable": true
+    },
+    {
+      "wiki": "enwiki",
+      "page_id": 9228,
+      "title": "Earth",
+      "canonical_url": "https://en.wikipedia.org/wiki/Earth",
+      "latest_revision_id": 1377721095,
+      "metadata_status": "fresh",
+      "trackable": true
+    }
+  ]
+}

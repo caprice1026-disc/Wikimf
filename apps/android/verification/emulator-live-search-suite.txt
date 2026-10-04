@@ -1,0 +1,6 @@
+
+org.wikimf.reader.NativeSearchUiRegressionTest:.
+
+Time: 14.4
+
+OK (1 test)

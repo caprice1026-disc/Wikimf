@@ -1,0 +1,16 @@
+{
+  "original_preferences_hash_matches": true,
+  "original_encrypted_credentials_hash_matches": true,
+  "keystore_key_preserved_without_uninstall": true,
+  "environment_restored": {
+    "wifi_on": "1",
+    "mobile_data": "1",
+    "font_scale": "1.0",
+    "accelerometer_rotation": "1",
+    "user_rotation": "0",
+    "lockscreen_disabled": "true"
+  },
+  "application_stopped": true,
+  "existing_history_preserved": true,
+  "queue_rows": 0
+}

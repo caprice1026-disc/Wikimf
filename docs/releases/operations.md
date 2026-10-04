@@ -50,6 +50,24 @@ $env:DATABASE_URL='postgresql+psycopg://wikimf@127.0.0.1:54329/wikimf_restored'
 
 ## 配布と更新
 
-Androidはdebug APK、Chromeはunpacked extension、Dashboardはstatic buildをローカル配布する。Chromeの実デバッグでは専用profileとDevTools `Extensions.loadUnpacked` を使用した。利用者の既存profileは変更していない。配布鍵・最終application ID・Chrome Store登録はSTで準備する。
+M10時点の閉じた検証用セットはAndroidのdebug APK、Chromeのunpacked extension、Dashboardのstatic buildである。Chromeの実デバッグでは専用profileとDevTools `Extensions.loadUnpacked` を使用した。利用者の既存profileは変更していない。正式公開用の鍵・最終application ID・Chrome Store登録はSTで準備する。
+
+Androidの実機STは、エミュレーターで機能を確認した後にST専用署名のrelease APKへ進む。実機1台の縦断・固有挙動を確認し、3〜7日普段使いする。debug APKの成功だけをrelease版の受入にせず、正式公開用鍵とST鍵を分離する。具体的な6段階と判定は [ST計画](ST-plan.md)、ビルドとインストールは [実機ST手順](android-device-ST.md) に従う。
 
 検証済みsourceをcommitしてから三つをbuildし、`python scripts/package_release.py` で `dist/0.1.0-<commit>/` にまとめる。manifestにはversion/schema/policy/extractor/source SHAと各artifactのSHA256を保存する。ZIP/APKはGitへ混ぜず、ソースと再現手順をmainで管理する。更新時はAPI契約・migration・policyの互換性を確認し、schema/policy変更を無言で過去記録へ適用しない。
+
+## 実Wikipediaの記事情報を使うローカル検証
+
+通常の `scripts/local_smoke_server.py` は合成identityと合成metadataを使う。実Wikipediaのmetadataを確認する場合は、別DB `wikimf_live_smoke` を作りmigrationを適用してから、`SMOKE_LIVE_WIKIPEDIA=1` で同じスクリプトを起動する。このモードは実MediaWikiClientを使用し、合成記事や読書イベントを作らない。実OAuthを通らない合成QA identityだけを用意する。接続先はlocalhost/127.0.0.1:54329の同名PostgreSQLへ制限し、SQLite、外部host、別port/DBを接続前に拒否する。
+
+```powershell
+createdb -h 127.0.0.1 -p 54329 -U wikimf wikimf_live_smoke
+$env:DATABASE_URL='postgresql+psycopg://wikimf@127.0.0.1:54329/wikimf_live_smoke'
+.venv\Scripts\python.exe -m alembic -c apps/backend/alembic.ini upgrade head
+$env:SMOKE_LIVE_WIKIPEDIA='1'
+.venv\Scripts\python.exe scripts/local_smoke_server.py
+```
+
+既存DBがある場合は作り直さず状態を確認する。APIは `localhost:8002`、debugエミュレーターからは `10.0.2.2:8002/api/v1`。別のPowerShellで `WIKIMF_API_PROXY=http://127.0.0.1:8002` を設定し、`npm.cmd --prefix apps/dashboard run dev -- --port 5174 --strictPort` でDashboardを起動する。認証情報はignored `.tmp/backend-live-smoke.json` に保存し、ログや証跡へ貼らない。実機用HTTPSサーバとして公開しない。
+
+Androidを専用QA identityへ明示的に連携し、実日英記事を各10秒以上記録した後、`node apps/dashboard/scripts/android-live-smoke.mjs` で実Chromeから照合する。実測のない記事をテストデータで埋めない。既存の端末連携・未送信データは保持し、API変更による資格情報消去を理解した隔離環境で実施する。

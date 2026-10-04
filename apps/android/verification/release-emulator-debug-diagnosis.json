@@ -1,0 +1,34 @@
+{
+  "device": "emulator-5556",
+  "process_id": "3584",
+  "apk_sha256": "5d976c84e5f877783d8ce26f952251aa30bc6b95ad7c9d61083be48ae59a3e95",
+  "read_only_http_probe": true,
+  "cdp_page_operations": false,
+  "debug_enabled_by_test": false,
+  "http": [
+    {
+      "path": "/json/version",
+      "status": 200,
+      "browser": "Chrome/124.0.6367.219",
+      "protocol": "1.3"
+    },
+    {
+      "path": "/json/list",
+      "status": 200,
+      "targets": [
+        {
+          "id": "94E27421C70FE4A3E31B5C366EBF2536",
+          "type": "page",
+          "url": "https://ja.wikipedia.org/wiki/%E3%83%A1%E3%82%A4%E3%83%B3%E3%83%9A%E3%83%BC%E3%82%B8",
+          "websocket_endpoint_present": true
+        }
+      ]
+    }
+  ],
+  "flags": [],
+  "properties": [
+    "[ro.build.type]: [userdebug]",
+    "[ro.debuggable]: [1]"
+  ],
+  "test_forward_removed": true
+}

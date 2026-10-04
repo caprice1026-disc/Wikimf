@@ -2,6 +2,30 @@
 
 検証は [ST計画](ST-plan.md) の6段階で進める。エミュレーターで機能を確認した後、ST専用鍵で署名したrelease APKを実機へ入れ、実Wikipediaと実Backendの縦断、実機固有の挙動、3〜7日の自己利用を行う。今回のHTTPS Backend/Dashboard接続先は未準備であり、用意後にAccountから設定する。
 
+## 作成したST用APK
+
+2026-10-04、下記のcommitからrelease APKを作成した。APKはローカルの `dist/android-st-0.1.0-87ad275e62dd/` に保存し、Gitにはソースと [配布manifest](evidence/android-st-artifact-manifest.json) を記録している。
+
+| 項目 | 値 |
+|---|---|
+| ソース | `87ad275e62ddba6a83d8467b0ab58e568bbad5ad` |
+| ファイル | `wikimf-0.1.0-staging-release.apk`、7,347,666 bytes |
+| APK SHA-256 | `5d976c84e5f877783d8ce26f952251aa30bc6b95ad7c9d61083be48ae59a3e95` |
+| 署名証明書 SHA-256 | `ec08dcc593a05822dbd25d08a712de495b83e0d7fb7a433c1bbd50c56ecb1f84` |
+| 配布設定 | `org.wikimf.reader`、0.1.0/code1、minSdk26、targetSdk35 |
+| ビルド検査 | release単体10件成功・skip0、assembleRelease/lintRelease成功、v2署名・RSA3072・署名者1、debug鍵と異なる |
+| アプリ設定 | debuggable無効、WebView debuggingはfalseを指定、cleartext禁止、debug専用network設定なし |
+
+[ビルド・署名ログ](../../apps/android/verification/staging-release-build.txt) に結果を保存した。同梱trackerのSHA-256は `c254a5cdd9f4ec4936988c8c42ca4fc94bcd6bdda9666827579b300a50cd32b5` で、検証した共通ソースからの生成物と一致する。実HTTPS/OAuth、物理端末でのtoken保存・再起動、3〜7日の利用は未実施である。
+
+## release APKのエミュレーター確認
+
+既存debug版を保持したまま、別AVD `wikimf_release_api35` / API35 / WebView124.0.6367.219へ、この配布APKそのものをインストールした。ゲストで日英検索・記事表示・スクロール、HTTP接続先の拒否、端末内履歴を確認した。force-stop後、OS再起動後、同じAPKの `install -r` 後も、履歴・端末内保存同意・HTTPS設定が保持された。同版の再インストールであり、異なるversion間のmigration確認ではない。
+
+[release検証集計](../../apps/android/verification/release-emulator-summary.json) に操作、APKの前後hash一致、更新時刻、各画面を記録した。日本語版はUnicode、英語版はEarthを使用した。検索語の入力はASCIIであり、日本語IME変換の確認は実機STに残す。クラウド未連携のゲスト操作なので、release版の認証token・Keystore保持・API同期の成功証拠にはしない。
+
+このAVDは `ro.build.type=userdebug` / `ro.debuggable=1` で、アプリがfalseを指定してもWebViewのDevTools socketが存在し、読取専用の `/json/list` にゲストページが表示された。[診断結果](../../apps/android/verification/release-emulator-debug-diagnosis.json) を保存した。同じ124版のChromiumは、debug OSまたはdebugアプリでは [初期化で強制有効](https://github.com/chromium/chromium/blob/124.0.6367.219/android_webview/glue/java/src/com/android/webview/chromium/WebViewChromiumAwInit.java) にし、[無効化要求を受け付けない](https://github.com/chromium/chromium/blob/124.0.6367.219/android_webview/glue/java/src/com/android/webview/chromium/SharedStatics.java)。本アプリのrelease設定は変更せず、通常の `user` OS上でDevToolsから接続できないことを実機STへ残す。一時的なADB forwardは削除済みで、この診断によるページ操作は行っていない。
+
 ## ST用release APKのビルド
 
 ローカルST鍵を初回だけ作成し、以後は同じ鍵を再利用する。鍵と保護されたパスワードは `apps/android/.local/signing/` に保存する。既存鍵は上書きしない。
@@ -37,6 +61,8 @@ Androidから連携を開始し、外部ブラウザでDashboardにGoogle/GitHub
 | 操作感 | 日本語IME、keyboard、回転、フォントサイズ、必要に応じlight/dark | 入力や読書を妨げず、重要操作が隠れない |
 
 縦断では同じownerの実記事ID・source・active時間・coverage・ACK・Dashboard値を照合する。強制停止中のWorkManager停止はOSの挙動として区別し、手動起動後に未送信分を回復させる。実回線と物理端末のKeystore/電池はエミュレーター結果で代用しない。
+
+表示済み記事をofflineで読み、その計測を後から同期する経路は検証対象に含む。記事本文をoffline向けに保存する機能はなく、offline中にプロセスが終了してWebViewを作り直すと本文を再取得できないことがある。この場合も未送信queueと履歴を保持し、オンラインへ戻って再読する。
 
 ## 3〜7日の自己利用記録
 

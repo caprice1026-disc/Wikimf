@@ -4,9 +4,11 @@ Wikipedia の読書記録を、自分の非公開履歴・統計へまとめる�
 
 読書状態は「閲覧」「途中まで読んだ」「読了」。表示された本文とアクティブ時間から推定するため、理解度の証明ではありません。手動設定では時間・推定文字数を増やしません。
 
-M0〜M10の機能を実装し、PostgreSQL・実Chrome・Android15エミュレータで閉じた検証を完了しました。一般公開前に必要な実OAuth、HTTPS配備、物理実機、署名と継続利用の確認は [ST計画](docs/releases/ST-plan.md) と [Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13) に残しています。
+M0〜M10の機能を実装し、PostgreSQL・実Chrome・Android15エミュレータで閉じた検証を完了しました。一般公開前に必要な実OAuth、HTTPS配備、物理実機、正式配布用の鍵・署名と継続利用の確認は [ST計画](docs/releases/ST-plan.md) と [Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13) に残しています。
 
 Androidは「エミュレーターで機能確認 → ST専用鍵で署名したrelease APK → 自分の実機1台へインストール → 実Wikipedia/Backendで縦断確認 → 実機固有の挙動 → 3〜7日の普段使い」の順で進めます。実機では画面OFF/復帰、回線切替と未送信の再同期、外部ブラウザ連携、Keystore、日本語IMEを重点的に確認します。HTTPS接続先は未準備のため、用意後にAccountで設定します。[ST署名・実機への移行手順](docs/releases/android-device-ST.md) にビルドと確認項目をまとめています。
+
+ST専用鍵で署名したrelease APKを `dist/android-st-0.1.0-87ad275e62dd/wikimf-0.1.0-staging-release.apk` に作成しました。[配布manifest](docs/releases/evidence/android-st-artifact-manifest.json) でソース・APK hash・署名を照合できます。APKと秘密鍵はGitに含めていません。長時間停止時の計測イベント、複数バッチの同期、解決できない記事による送信停止、WebViewクラッシュ後の再読み込みを修正し、日英の実記事からAPI/PG/Dashboardまで追加検証しました。配布APKも別エミュレーターで日英のゲスト閲覧、再起動、同じAPKの更新後の履歴保持を確認済みです。[release検証結果と環境制約](docs/releases/android-device-ST.md#release-apkのエミュレーター確認) を実機STへ引き継ぎます。
 
 Webダッシュボードは、読書履歴を中心にした白・セージ・深緑の画面へ刷新しました。期間別チャート、記事の状態と本文表示率、ライブラリ、設定を統一し、モバイルの下部ナビゲーションとダークテーマに対応しています。[画面と追加検証](docs/releases/issue-fixes-dashboard.md) に、Issue #14〜#18の修正結果をまとめています。
 

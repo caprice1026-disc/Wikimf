@@ -1,0 +1,10 @@
+
+org.wikimf.reader.PrivacyRegressionTest:......
+org.wikimf.reader.PersistenceTest:..
+org.wikimf.reader.ReaderFocusRegressionTest:.
+org.wikimf.reader.DashboardLinkIntegrationTest:.
+org.wikimf.reader.NativeSearchUiRegressionTest:.
+
+Time: 72.09
+
+OK (11 tests)

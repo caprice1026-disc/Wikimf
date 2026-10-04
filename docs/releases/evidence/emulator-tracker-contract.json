@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-10-04T12:51:44Z",
+  "status": "passed",
+  "scope": "Isolated Node-generated DOMTracker events validated by the actual backend ReadingEventInput and projection.contradictory functions. Synthetic identifiers and document metadata; no article body, API requests, database writes, or device execution.",
+  "sources": [
+    {
+      "path": "packages/tracker/tracker.js",
+      "sha256": "89479f9bb920dffe16d5b50c3b4ab9a82b490dc448aed241bdaf85c3e4fb3cd3"
+    },
+    {
+      "path": "apps/backend/wikimf/contracts.py",
+      "sha256": "ece607180c0919d7e79af2ad845d04518c67c368c7c317edaf18e569475309eb"
+    },
+    {
+      "path": "apps/backend/wikimf/projection.py",
+      "sha256": "44eae24eb2dedfdd51fc0b60b365ab70a517110ced0bcdb942dc2dd0121b7c95"
+    }
+  ],
+  "source_hash_note": "Hashes identify the unchanged final source used by the completed validation; this artifact records that run without rerunning it.",
+  "method": "node --input-type=module generated five scenario event arrays; .venv/Scripts/python.exe validated every event with ReadingEventInput.model_validate, passed model_dump(mode='json') rows to projection.contradictory, and asserted each final session.closed interval had equal start_at and end_at.",
+  "scenarios": [
+    { "name": "saved-empty-98s", "accepted_events": 4, "contradictory": false, "zero_length_close_accepted": true },
+    { "name": "unsaved-prefix-98s", "accepted_events": 4, "contradictory": false, "zero_length_close_accepted": true },
+    { "name": "stop-98s", "accepted_events": 3, "contradictory": false, "zero_length_close_accepted": true },
+    { "name": "continuous-60s", "accepted_events": 4, "contradictory": false, "zero_length_close_accepted": true },
+    { "name": "wall-mono-tolerance", "accepted_events": 4, "contradictory": false, "zero_length_close_accepted": true }
+  ],
+  "totals": { "scenarios": 5, "validated_events": 19, "validation_errors": 0, "contradictory_scenarios": 0 },
+  "exit_code": 0,
+  "measured_stdout": [
+    "saved-empty-98s: 4 actual ReadingEventInput events accepted, contradictory=False",
+    "unsaved-prefix-98s: 4 actual ReadingEventInput events accepted, contradictory=False",
+    "stop-98s: 3 actual ReadingEventInput events accepted, contradictory=False",
+    "continuous-60s: 4 actual ReadingEventInput events accepted, contradictory=False",
+    "wall-mono-tolerance: 4 actual ReadingEventInput events accepted, contradictory=False",
+    "PASS: 5 scenarios, 19 validated events; no API/DB writes"
+  ]
+}

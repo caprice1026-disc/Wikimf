@@ -1,0 +1,142 @@
+{
+  "captured_at": "2026-10-04T13:33:50.6725104Z",
+  "source_sha": "87ad275e62ddba6a83d8467b0ab58e568bbad5ad",
+  "artifact": {
+    "path": "dist/android-st-0.1.0-87ad275e62dd/wikimf-0.1.0-staging-release.apk",
+    "bytes": 7347666,
+    "sha256_before": "5d976c84e5f877783d8ce26f952251aa30bc6b95ad7c9d61083be48ae59a3e95",
+    "sha256_after": "5d976c84e5f877783d8ce26f952251aa30bc6b95ad7c9d61083be48ae59a3e95",
+    "unchanged": true,
+    "certificate_sha256": "ec08dcc593a05822dbd25d08a712de495b83e0d7fb7a433c1bbd50c56ecb1f84",
+    "embedded_tracker_sha256": "c254a5cdd9f4ec4936988c8c42ca4fc94bcd6bdda9666827579b300a50cd32b5"
+  },
+  "environment": {
+    "device": "emulator-5556",
+    "api": 35,
+    "model": "sdk_gphone64_x86_64",
+    "physical_device": false,
+    "screen": "1080x2340",
+    "webview": "com.google.android.webview 124.0.6367.219",
+    "os_build_type": "userdebug",
+    "ro_debuggable": 1,
+    "emulator_5554_touched": false
+  },
+  "checks": {
+    "signature_and_alias_certificate_match": "passed",
+    "release_manifest_non_debuggable": "passed",
+    "installed_package_non_debuggable": "passed",
+    "cleartext_manifest_false_no_debug_network_config": "passed",
+    "fresh_install_and_launch": "passed",
+    "guest_account_unlinked": "passed",
+    "local_history_consent_ui": "passed",
+    "http_loopback_api_url_rejected_ui": "passed",
+    "rejected_http_url_not_persisted": "passed",
+    "english_live_search_earth": "passed",
+    "english_live_reader_earth": "passed",
+    "japanese_live_search_unicode": "passed",
+    "japanese_live_reader_unicode": "passed",
+    "japanese_reader_scroll": "passed",
+    "viewed_and_search_history_two_articles": "passed",
+    "force_stop_relaunch_consent_https_history_preserved": "passed",
+    "actual_avd_reboot_boot_id_changed": "passed",
+    "reboot_consent_https_history_preserved": "passed",
+    "same_signed_apk_install_r_data_preserved": "passed",
+    "same_signed_apk_update_first_install_preserved_last_update_changed": "passed",
+    "immutable_apk_final_hash": "passed",
+    "effective_webview_debugging_disabled": "not_verified_on_user_os"
+  },
+  "article_history": {
+    "viewed_titles": [
+      "Unicode",
+      "Earth"
+    ],
+    "searched_titles": [
+      "Unicode",
+      "Earth"
+    ],
+    "ui_title_nodes_before_restart": {
+      "Earth": 2,
+      "Unicode": 2
+    },
+    "ui_title_nodes_after_restart": {
+      "Earth": 2,
+      "Unicode": 2
+    },
+    "ui_title_nodes_after_reboot": {
+      "Earth": 2,
+      "Unicode": 2
+    },
+    "ui_title_nodes_after_same_apk_update": {
+      "Earth": 2,
+      "Unicode": 2
+    },
+    "query_ime_tested": "ASCII input through Android input tool; Japanese IME composition not tested"
+  },
+  "update": {
+    "method": "adb -s emulator-5556 install -r same immutable APK",
+    "same_apk": true,
+    "different_version_upgrade_tested": false,
+    "first_install_time": "2026-10-04 13:17:34",
+    "last_update_time": "2026-10-04 13:27:32"
+  },
+  "runtime_debug_boundary": {
+    "app_manifest_debuggable": false,
+    "app_requests_debugging_disabled": true,
+    "read_only_http_probe": true,
+    "page_target_endpoint_exposed": true,
+    "cdp_connection_or_page_operations": false,
+    "test_enabled_debugging": false,
+    "test_forward_removed": true,
+    "user_os_disabling_verification_pending": true,
+    "status": "OS constraint: WebView124 forces debugging on userdebug OS; not a pass for effective runtime disabling",
+    "diagnosis": "release-emulator-debug-diagnosis.json",
+    "primary_sources": [
+      "https://github.com/chromium/chromium/blob/124.0.6367.219/android_webview/glue/java/src/com/android/webview/chromium/SharedStatics.java#L79-L85",
+      "https://github.com/chromium/chromium/blob/124.0.6367.219/android_webview/glue/java/src/com/android/webview/chromium/WebViewChromiumAwInit.java#L213-L216",
+      "https://github.com/chromium/chromium/blob/124.0.6367.219/base/android/java/src/org/chromium/base/BuildInfo.java#L335-L355"
+    ]
+  },
+  "automation_retry": {
+    "stage": "force-stop/relaunch Account selection",
+    "first_tap_left_reader_visible": true,
+    "retried_after_native_ui_visible": true,
+    "rerun_passed": true,
+    "original_capture": "release-emulator-12-restart-before-ready.png"
+  },
+  "remaining_unverified": [
+    "Real HTTPS Backend/Dashboard and OAuth login/device linking",
+    "Release Keystore linked-token save/read across restart/reboot",
+    "Release cloud queue/API/PG/Dashboard end-to-end",
+    "Physical user OS WebView effective debugging disabled",
+    "Physical device network/lifecycle/battery/IME and 3-7 day self-use",
+    "Different APK/version upgrade or migration"
+  ],
+  "evidence": {
+    "screenshots": [
+      "release-emulator-01-launch.png",
+      "release-emulator-02-account.png",
+      "release-emulator-04-http-rejected.png",
+      "release-emulator-06-en-search.png",
+      "release-emulator-07-en-reader.png",
+      "release-emulator-08-ja-search.png",
+      "release-emulator-09-ja-reader.png",
+      "release-emulator-10-ja-scrolled.png",
+      "release-emulator-11-history.png",
+      "release-emulator-12-restart-account.png",
+      "release-emulator-12-restart-before-ready.png",
+      "release-emulator-13-restart-history.png",
+      "release-emulator-14-reboot-account.png",
+      "release-emulator-15-reboot-history.png",
+      "release-emulator-16-update-account.png",
+      "release-emulator-17-update-history.png"
+    ],
+    "signature": "release-emulator-apk-signature.txt",
+    "manifest": "release-emulator-manifest.txt",
+    "install": "release-emulator-install.txt",
+    "same_apk_update": "release-emulator-update-install.txt",
+    "installed_package": "release-emulator-package.txt",
+    "read_only_debug_diagnosis": "release-emulator-debug-diagnosis.json",
+    "raw_uiautomator_xml": ".tmp/release-emulator-ui/"
+  },
+  "scope_completed": "Guest release UI, consent/history, HTTP rejection, restart/reboot, same-signer reinstall and artifact consistency; runtime user OS/linked/cloud/physical ST remains"
+}
