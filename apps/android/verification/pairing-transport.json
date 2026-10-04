@@ -1,0 +1,15 @@
+{
+  "tests": 1,
+  "failures": 0,
+  "seconds": 6.646,
+  "source": "android_reader",
+  "transport": "Actual emulator Android Api -> local API/PostgreSQL",
+  "web_get_has_no_user_code": true,
+  "web_approval_with_csrf": true,
+  "native_exchange_and_authenticated_me": true,
+  "owner_matches_qa_fixture": true,
+  "new_test_device_revoked": true,
+  "existing_device_revocation_states_preserved": true,
+  "storage": "Isolated device-protected realm; existing Reader linkage/history preserved",
+  "oauth": "Synthetic QA Web session; live Google/GitHub OAuth remains ST"
+}

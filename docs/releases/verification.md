@@ -2,7 +2,7 @@
 
 2026-10-04。M0〜M10の機能を実装し、閉じたローカル検証を行った。実Google/GitHub、HTTPS配備、物理端末、release署名、継続利用を含めた一般公開のG10受入は保留する。ユーザーの指示でAndroid15エミュレータを先行し、未実施は [ST計画](ST-plan.md) と [70ケース受入台帳](acceptance-matrix.md) に残す。
 
-配布sourceは `51d3360da45459aabc61643d4cc74a164de0f556`。[GitHub Actions](https://github.com/caprice1026-disc/Wikimf/actions/runs/37157922359)でBackend、tracker/extension、Dashboard、Androidの4jobが成功した。以後のREADME・検証記録の更新は配布sourceと分け、バイナリの対応を [manifest](evidence/artifact-manifest.json) へ固定した。
+この文書はM10時点の配布source `51d3360da45459aabc61643d4cc74a164de0f556` の記録である。[GitHub Actions](https://github.com/caprice1026-disc/Wikimf/actions/runs/37157922359)でBackend、tracker/extension、Dashboard、Androidの4jobが成功した。当時のバイナリの対応は [manifest](evidence/artifact-manifest.json) へ固定した。以後のIssue #14〜#18修正と画面刷新は [追加検証記録](issue-fixes-dashboard.md) を参照する。
 
 ## 機能と実行済み確認
 

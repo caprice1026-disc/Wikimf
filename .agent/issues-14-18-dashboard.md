@@ -10,15 +10,17 @@
 
 - [x] (2026-10-04) 新規Issue #14〜#18、現在のコード、Dashboard設計書、既存検証環境を確認した。
 - [x] (2026-10-04) #14 のコード非開示・hash保存・migration・Backend回帰を完了した。実端末pairingの再確認を統合時に行う。
-- [ ] #15/#17 のAndroidデータ削除と送信同意境界を実装し、エミュレータで確認する。
-- [ ] #16 のChrome復旧処理を実装し、実Chromeでlease再取得を確認する。
-- [ ] #18 の直近認証と同一利用者確認、Dashboard導線を検証する。
-- [ ] Dashboardの全主要画面を刷新し、desktop/mobile/dark/empty/errorを確認する。
+- [x] (2026-10-04) #15/#17 のAndroidデータ削除と送信同意境界を実装し、実エミュレータ8件・JVM10件・build/lintで確認した。
+- [x] (2026-10-04) #16 のChrome復旧処理を実装し、unit12件・実Chrome復旧12判定・既存9判定・実APIpairing/ACKを確認した。
+- [x] (2026-10-04) #18 の直近認証と同一利用者確認、Dashboard導線を検証した。独立レビューで発見したlogout競合とlock待ち期限越えを修正し、PG全95件成功。
+- [x] (2026-10-04) Dashboardの全主要画面を刷新し、desktop/mobile/dark/empty/errorと26操作シナリオを確認した。
 - [ ] READMEと検証記録を更新し、mainへpush、remote SHA/CIとIssueの状態を確認する。
 
 ## Surprises & Discoveries
 
 AndroidはSyncだけでなくReaderのページ完了時にもresolveを呼ぶため、API共通境界の同意確認が必要だった。OAuth providerのaccount pickerはパスワード再入力の保証ではない。実OAuth設定がないため、プロバイダーの実認証画面は引き続きSTで検証する。
+
+独立レビューで、session存在SELECTと新session発行の間にlogoutがcommitできる競合、Userロック待ち中に10分を越えたlinkの成功を再現した。旧sessionをDELETE RETURNINGで原子的に消費してから変更する方式へ改め、待機後とcommit前に期限を再確認した。再現3ケースを含むPG全95件が成功した。Dashboardでは選択中providerを解除した後も旧providerへ再確認POSTする問題を修正し、残存providerを選ぶ回帰を追加した。
 
 ## Decision Log
 
@@ -30,9 +32,13 @@ AndroidはSyncだけでなくReaderのページ完了時にもresolveを呼ぶ�
 
 2026-10-04: Androidは送信Outboxと最大100件の診断を分離し、送信不能payloadを削除する。control取得と削除処理の後、同意・collectionを確認してからURL解決とbatch送信を行う。停止中は保持/破棄、再同意時は保持分同期という既存方針を画面へ明記する。
 
+2026-10-04: 重要操作のcallbackは旧sessionを同一transactionで原子的に消費し、logout済みなら新sessionを発行しない。失敗時は消費をrollbackする。認証期限はlock待機の後にも確認する。再確認のUIはprovider解除後に存在するproviderから選び直す。
+
 ## Outcomes & Retrospective
 
 Backendは実PG full90件と追加2ケースを含むsecurity suite17件が成功。既存認証suiteでは同時に開始した2つ目のlinkが先行linkによるsession更新で403となるため、以前のprovider重複409からsession変更拒否へ期待値を更新した。データを保持した0002→0004移行と実dump/restoreは14項目成功。実OAuth、HTTPS、署名配布、物理端末の受入は既存Issue #13のSTを継続する。新しい不具合のローカル検証と実プロバイダーの検証を混同しない。
+
+追加修正後はPG全95件、Android JVM10/native8+pairing1件、Chrome unit12/復旧12/既存9判定、Dashboard26 workflowが成功した。Backend92629dc、Chrome01febf0、Android60801e5をmainへ順次pushし各remote SHAとCI成功を確認した。最終Dashboard commitと配布物の対応付けを進める。
 
 ## Context and Orientation
 
@@ -77,3 +83,5 @@ Dashboardは1440pxと390pxを基本に、overflow、コントラスト、keyboar
 更新記録: 2026-10-04、新規Issue5件とDashboard刷新の実行計画を作成した。
 
 更新記録: 2026-10-04、Backend修正の回帰とmigration/復旧の成功、provider再確認の保証範囲を反映した。
+
+更新記録: 2026-10-04、実クライアントの確認、Dashboard刷新、独立レビューによる競合修正と段階pushを反映した。

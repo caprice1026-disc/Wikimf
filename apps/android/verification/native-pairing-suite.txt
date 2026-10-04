@@ -1,0 +1,6 @@
+
+org.wikimf.reader.PairingTransportIntegrationTest:.
+
+Time: 6.646
+
+OK (1 test)

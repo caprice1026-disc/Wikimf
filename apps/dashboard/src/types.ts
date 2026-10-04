@@ -1,7 +1,7 @@
 export type ReadingState = 'viewed' | 'partial' | 'completed';
 export type Wiki = 'jawiki' | 'enwiki';
 export type Source = 'android_reader' | 'chrome_extension';
-export type User = { user_id: string; display_name: string; csrf_token: string; timezone: string; recording_epoch: number; collection_enabled: boolean };
+export type User = { user_id: string; display_name: string; csrf_token: string; timezone: string; recording_epoch: number; collection_enabled: boolean; recent_auth_until: string | null };
 export type Article = { article_id: string; wiki: Wiki; page_id: number; title: string; canonical_url: string; availability?: string };
 export type ReadingRecord = {
   article: Article; article_id: string;
@@ -37,6 +37,6 @@ export type Privacy = {
 export type Identity = { provider: 'google' | 'github'; linked_at: string };
 export type Device = { device_id: string; display_name: string; source: Source; last_used_at?: string; revoked: boolean; created_at: string; expires_at: string };
 export type Achievement = { id: string; name: string; description: string; earned: boolean; progress: number; target: number };
-export type DeviceLink = { link_id: string; display_name: string; source: Source; user_code: string; scopes: string[]; expires_at: string; approved: boolean };
+export type DeviceLink = { link_id: string; display_name: string; source: Source; scopes: string[]; expires_at: string; approved: boolean };
 // The public response intentionally has no article/session/history fields.
 export type PublicProfile = { user_id: string; display_name: string; active_ms: number | null; achievements: Achievement[] | null };

@@ -218,8 +218,6 @@ def create_app(database_url=None, mediawiki=None):
             if current.id != flow["reauth_user_id"] or web.token_hash != flow["session_hash"]:
                 return reauth_redirect("reauth_error","reauthentication_session_changed")
             verified_user = lock_user(db,current.id)
-            if db.scalar(select(WebSession.token_hash).where(WebSession.token_hash==web.token_hash)) is None:
-                return reauth_redirect("reauth_error","reauthentication_session_changed")
             identity = db.scalar(select(Identity).where(Identity.user_id==current.id,Identity.provider==provider,Identity.subject==subject))
             if not identity:
                 return reauth_redirect("reauth_error","reauthentication_identity_mismatch")
@@ -230,16 +228,27 @@ def create_app(database_url=None, mediawiki=None):
                 raise APIError("identity_link_session_changed",403)
             authenticated_at = web.authenticated_at
             lock_user(db,current.id)
-            if db.scalar(select(WebSession.token_hash).where(WebSession.token_hash==web.token_hash)) is None:
-                raise APIError("identity_link_session_changed",403)
         try:
+            if verified_user or link_user_id:
+                # Consume the exact session atomically. A prior existence SELECT
+                # alone can race with logout and resurrect a revoked session.
+                consumed = db.execute(delete(WebSession).where(WebSession.token_hash==flow["session_hash"],WebSession.user_id==current.id)
+                                      .returning(WebSession.expires_at)).scalar_one_or_none()
+                if consumed is None or utc(consumed) <= now():
+                    if verified_user:
+                        return reauth_redirect("reauth_error","reauthentication_session_changed")
+                    raise APIError("identity_link_session_changed",403)
+                if link_user_id:
+                    # Both User and session writes may have waited on other transactions.
+                    require_recent_auth(web)
             user = verified_user or identify(db,provider,subject,name,link_user_id)
             old_secret = request.cookies.get(COOKIE)
-            if old_secret:
+            if old_secret and not (verified_user or link_user_id):
                 db.execute(delete(WebSession).where(WebSession.token_hash == digest(old_secret)))
             secret,session = issue_web_session(db,user.id)
             if link_user_id:
                 session.authenticated_at = authenticated_at
+                require_recent_auth(web)
             db.commit()
         except IntegrityError:
             db.rollback()

@@ -3,12 +3,15 @@ from datetime import timedelta
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
+from fastapi.testclient import TestClient
 
 from conftest import web_headers
 from test_auth_flow import providers, start, callback
 from wikimf.auth import digest, identify, issue_web_session
 from wikimf.db import DeviceLink, Identity, User, WebSession, now
+import wikimf.auth as authentication
+import wikimf.main as routes
 
 
 def age_session(app, ids, minutes=11):
@@ -160,3 +163,63 @@ def test_wrong_pair_code_exhaustion_expires_even_correct_code(env):
     for _ in range(5):
         assert client.post(path, json={"user_code":wrong}, headers=web_headers(ids)).status_code == 400
     assert client.post(path, json={"user_code":grant["user_code"]}, headers=web_headers(ids)).status_code == 410
+
+
+@pytest.mark.parametrize("mode", ["reauth", "link"])
+def test_callback_never_resurrects_session_after_committed_logout(env, providers, mode):
+    app, client, ids = env
+    if app.state.engine.dialect.name != "postgresql":
+        pytest.skip("requires independent PostgreSQL transactions")
+    providers["google"].subject = "fixture-google"
+    if mode == "reauth":
+        state = reauth(client, ids)
+    else:
+        target = urlsplit(client.post("/api/v1/me/identities/github/link", headers=web_headers(ids)).json()["authorization_url"])
+        state = start(client, target.path+"?"+target.query)
+    logout_results = []
+    intercepted = False
+    with TestClient(app) as logout_client:
+        logout_client.cookies.set("wikimf_session", ids["web_secret"])
+        def before_session_consume(conn, cursor, statement, parameters, context, executemany):
+            nonlocal intercepted
+            if statement.startswith("DELETE FROM web_sessions") and not intercepted:
+                intercepted = True
+                logout_results.append(logout_client.post("/api/v1/auth/logout", headers=web_headers(ids)).status_code)
+        event.listen(app.state.engine, "before_cursor_execute", before_session_consume)
+        try:
+            response = callback(client, "google" if mode == "reauth" else "github", state)
+        finally:
+            event.remove(app.state.engine, "before_cursor_execute", before_session_consume)
+    assert logout_results == [200]
+    if mode == "reauth":
+        assert "reauth_error=reauthentication_session_changed" in response.headers["location"]
+    else:
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "identity_link_session_changed"
+    assert client.get("/api/v1/me").status_code == 401
+    with app.state.sessions() as db:
+        assert not list(db.scalars(select(WebSession)))
+        assert [i.provider for i in db.scalars(select(Identity))] == ["google"]
+
+
+def test_identity_link_rechecks_auth_after_lock_wait(env, providers, monkeypatch):
+    app, client, ids = env
+    target = urlsplit(client.post("/api/v1/me/identities/github/link", headers=web_headers(ids)).json()["authorization_url"])
+    state = start(client, target.path+"?"+target.query)
+    clock = now()
+    with app.state.sessions() as db:
+        db.get(WebSession, digest(ids["web_secret"])).authenticated_at = clock - timedelta(minutes=9)
+        db.commit()
+    monkeypatch.setattr(authentication, "now", lambda: clock)
+    original_lock = routes.lock_user
+    def delayed_lock(db, user_id):
+        nonlocal clock
+        clock += timedelta(minutes=2)
+        return original_lock(db, user_id)
+    monkeypatch.setattr(routes, "lock_user", delayed_lock)
+    response = callback(client, "github", state)
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "reauthentication_required"
+    with app.state.sessions() as db:
+        assert [i.provider for i in db.scalars(select(Identity))] == ["google"]
+        assert db.get(WebSession, digest(ids["web_secret"])) is not None, "failed callback must roll back session consumption"

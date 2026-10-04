@@ -7,6 +7,7 @@ import { periodQuery } from './format';
 import { AccountPage, ActivityPage, ArticlePage, LibraryPage, PairingPage, PrivacyPage, StatsPage } from './pages';
 import type { Achievement, Activity, Page, Privacy, PublicProfile, Stats, User } from './types';
 import { ReadingRow } from './components';
+import { Icon, type IconName } from './icons';
 
 type AuthContextValue = {
   user: ReturnType<typeof useResource<User>>;
@@ -17,9 +18,9 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function useAuth() { return useContext(AuthContext)!; }
 export function useTimezone() { const auth = useAuth(); return auth.privacy.data?.timezone || auth.user.data?.timezone || 'Asia/Tokyo'; }
 
-const navigation = [
-  ['/app', 'Overview', '◫'], ['/app/library', 'Library', '▤'], ['/app/activity', 'Activity', '◷'],
-  ['/app/stats', 'Statistics', '▥'], ['/app/achievements', 'Achievements', '✧'],
+const navigation: [string, string, IconName][] = [
+  ['/app', 'Overview', 'home'], ['/app/library', 'Library', 'book'], ['/app/activity', 'Activity', 'clock'],
+  ['/app/stats', 'Statistics', 'chart'], ['/app/achievements', 'Achievements', 'spark'],
 ];
 
 export function App() {
@@ -79,7 +80,14 @@ function AppShell() {
     window.scrollTo({ top: 0 });
     document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
   }, [location.pathname]);
-  return <div className="app-shell"><a href="#main-content" className="skip-link">本文へ移動</a><header className="global-header"><Link className="wordmark" to="/app">wikimf<span>·</span></Link><p className="brand-caption">A personal knowledge ledger</p><div className="global-actions"><span className={`collection-indicator ${(privacy.data?.collection_enabled ?? user.data?.collection_enabled) ? 'enabled' : ''}`}><i />{privacy.loading ? '確認中' : (privacy.data?.collection_enabled ?? user.data?.collection_enabled) ? '記録受付中' : '記録停止中'}</span><button className="theme-toggle" aria-label={theme === 'light' ? 'ダークモードに切り替え' : 'ライトモードに切り替え'} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? '◐' : '☀'}</button><Link to="/app/settings/account" className="avatar" aria-label="アカウント設定">{user.data?.display_name.slice(0, 1) || 'W'}</Link></div></header><aside className="sidebar"><p className="eyebrow">YOUR SPACE</p><nav aria-label="メインナビゲーション">{navigation.map(([to, label, icon]) => <NavLink key={to} to={to} end={to === '/app'}><span aria-hidden="true">{icon}</span>{label}</NavLink>)}</nav><div className="sidebar-bottom"><NavLink to="/app/settings/account">Account & devices</NavLink><NavLink to="/app/settings/privacy">Privacy & data</NavLink><p>Wikipedia を読み歩いた跡を、<br />少しずつ積み上げていく。</p></div></aside><main id="main-content" className="main-content" tabIndex={-1}><Outlet /></main><nav className="mobile-nav" aria-label="モバイルナビゲーション">{[...navigation.slice(0, 3), ['/app/settings', 'More', '···']].map(([to, label, icon]) => <NavLink key={to} to={to} end={to === '/app'}><span aria-hidden="true">{icon}</span>{label}</NavLink>)}</nav></div>;
+  const mobileNavigation: [string, string, IconName][] = [...navigation.slice(0, 3), ['/app/settings', 'More', 'shield']];
+  return <div className="app-shell">
+    <a href="#main-content" className="skip-link">本文へ移動</a>
+    <header className="global-header"><Link className="wordmark mobile-wordmark" to="/app"><Icon name="book" />wikimf</Link><p className="brand-caption">A PERSONAL KNOWLEDGE LEDGER</p><div className="global-actions"><span className={`collection-indicator ${(privacy.data?.collection_enabled ?? user.data?.collection_enabled) ? 'enabled' : ''}`}><i />{privacy.loading ? '確認中' : (privacy.data?.collection_enabled ?? user.data?.collection_enabled) ? '記録受付中' : '記録停止中'}</span><button className="theme-toggle" aria-label={theme === 'light' ? 'ダークモードに切り替え' : 'ライトモードに切り替え'} onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}><Icon name={theme === 'light' ? 'moon' : 'sun'} /></button><Link to="/app/settings/account" className="avatar" aria-label="アカウント設定">{user.data?.display_name.slice(0, 1) || 'W'}</Link></div></header>
+    <aside className="sidebar"><Link className="wordmark sidebar-wordmark" to="/app"><Icon name="book" />wikimf</Link><p className="eyebrow">YOUR SPACE</p><nav aria-label="メインナビゲーション">{navigation.map(([to, label, icon]) => <NavLink key={to} to={to} end={to === '/app'}><Icon name={icon} />{label}</NavLink>)}</nav><div className="sidebar-bottom"><NavLink to="/app/settings/account"><Icon name="phone" />Account & devices</NavLink><NavLink to="/app/settings/privacy"><Icon name="shield" />Privacy & data</NavLink><p>Wikipedia を読み歩いた跡を、<br />少しずつ積み上げていく。</p></div></aside>
+    <main id="main-content" className="main-content" tabIndex={-1}><Outlet /><footer className="ledger-footer"><Icon name="book" /><span>記録は、あなたのもの。</span><Link to="/app/settings/privacy">Privacy & data <Icon name="arrow" /></Link></footer></main>
+    <nav className="mobile-nav" aria-label="モバイルナビゲーション">{mobileNavigation.map(([to, label, icon]) => <NavLink key={to} to={to} end={to === '/app'}><Icon name={icon} />{label}</NavLink>)}</nav>
+  </div>;
 }
 
 function LandingPage() {
@@ -101,7 +109,10 @@ function OverviewPage() {
   const stats = useResource<Stats>(`/me/stats?${periodQuery('7d', timezone)}`);
   const recent = useResource<Page<Activity>>('/me/activities?limit=12');
   const achievements = useResource<Page<Achievement>>('/me/achievements');
-  return <><header className="profile-header"><div><p className="eyebrow">YOUR WIKIPEDIA READING HISTORY</p><h1>{user.data?.display_name}</h1><p className="muted">今日の寄り道も、ここに。</p></div><Link className="privacy-badge" to="/app/settings/privacy">{privacy.error ? '公開設定を確認できません' : privacy.loading ? '公開設定を確認中' : privacy.data?.profile_public ? '◉ 選んだ情報を公開中' : '🔒 Private'}</Link></header><Resource value={stats}>{data => <><StatRail stats={data} /><p className="rail-caption">記事数と読了数は現在の状態。時間と推定文字数は直近 7 日間の記録です。</p></>}</Resource><div className="overview-grid"><section className="recent-section"><div className="section-heading"><h2>Recent reading</h2><Link to="/app/activity">すべて見る →</Link></div><Resource value={recent}>{data => data.items.length ? <div className="reading-list">{data.items.map(item => <ReadingRow key={item.session_id} item={item} timezone={timezone} />)}</div> : <EmptyState />}</Resource></section><aside className="insights"><section><div className="section-heading"><h2>Last 7 days</h2><Link to="/app/stats" aria-label="統計を見る">↗</Link></div><Resource value={stats}>{data => <DailyBars daily={data.daily} timezone={timezone} />}</Resource><p className="muted small">アクティブな読書時間 · {timezone}</p></section><section><div className="section-heading"><h2>Milestones</h2><Link to="/app/achievements" aria-label="称号を見る">→</Link></div><Resource value={achievements}>{data => data.items.some(item => item.earned) ? <Achievements items={data.items.filter(item => item.earned).slice(-2)} /> : <p className="muted">最初の記録から、小さな節目が積み上がります。</p>}</Resource></section><div className="quiet-note"><span aria-hidden="true">¶</span><p>記事を開いただけの閲覧と、読み進めた記録は別のもの。読了は、自分で変更できます。</p><Link to="/app/settings/privacy">記録の仕組みと設定 →</Link></div></aside></div></>;
+  return <><header className="profile-header"><div><p className="eyebrow">YOUR WIKIPEDIA READING HISTORY</p><h1 className="journal-title">Reading journal</h1><p className="profile-name">{user.data?.display_name}<span>今日の寄り道も、ここに。</span></p></div><Link className="privacy-badge" to="/app/settings/privacy"><Icon name="lock" />{privacy.error ? '公開設定を確認できません' : privacy.loading ? '公開設定を確認中' : privacy.data?.profile_public ? '選んだ情報を公開中' : 'Private'}</Link></header>
+    <Resource value={stats}>{data => <><StatRail stats={data} /><p className="rail-caption">記事数と読了数は現在の状態。時間と推定文字数は直近 7 日間の記録です。</p></>}</Resource>
+    <div className="overview-grid"><section className="recent-section"><div className="section-heading"><div><h2>Recent reading</h2><p className="section-description">最近読み歩いた、知識の足跡。</p></div><Link to="/app/activity">すべて見る <Icon name="arrow" /></Link></div><Resource value={recent}>{data => data.items.length ? <div className="reading-list">{data.items.map(item => <ReadingRow key={item.session_id} item={item} timezone={timezone} />)}</div> : <EmptyState />}</Resource></section>
+    <aside className="insights"><section className="insight-chart"><div className="section-heading"><div><h2>Last 7 days</h2><p className="section-description">一週間の読書リズム</p></div><Link to="/app/stats" aria-label="統計を見る"><Icon name="chart" /></Link></div><Resource value={stats}>{data => <DailyBars daily={data.daily} timezone={timezone} columns />}</Resource><p className="muted small">アクティブな読書時間 · {timezone}</p></section><section><div className="section-heading"><h2><Icon name="spark" />Milestones</h2><Link to="/app/achievements" aria-label="称号を見る"><Icon name="arrow" /></Link></div><Resource value={achievements}>{data => data.items.some(item => item.earned) ? <Achievements items={data.items.filter(item => item.earned).slice(-2)} /> : <p className="muted">最初の記録から、小さな節目が積み上がります。</p>}</Resource></section><div className="quiet-note"><Icon name="book" /><div><p>記事を開いただけの閲覧と、読み進めた記録は別のもの。読了は、自分で変更できます。</p><Link to="/app/settings/privacy">記録の仕組みと設定 →</Link></div></div></aside></div></>;
 }
 
 function AchievementsPage() {

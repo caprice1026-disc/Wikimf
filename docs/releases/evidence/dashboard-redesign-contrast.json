@@ -1,0 +1,15 @@
+{
+  "method": "WCAG relative luminance; shared text and control tokens",
+  "minimum_normal_text": 4.5,
+  "contrast_ratios": {
+    "light-text": 13.91,
+    "light-muted": 5.14,
+    "light-muted-sage": 4.56,
+    "light-accent": 7.19,
+    "light-partial": 5.16,
+    "dark-text": 14.39,
+    "dark-muted": 8.59,
+    "dark-accent": 9.03,
+    "dark-partial": 7.42
+  }
+}

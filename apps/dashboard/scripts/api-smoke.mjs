@@ -24,13 +24,14 @@ try {
   const me = await meResponse.json();
   assert.equal(me.user_id, fixture.user_id);
   assert.ok(me.csrf_token);
+  assert.ok(Object.hasOwn(me, 'recent_auth_until'), 'actual API provides authentication freshness');
 
   await page.goto(`${base}/app`);
   await page.getByRole('heading', { name: 'Recent reading', exact: true }).waitFor();
   await page.waitForLoadState('networkidle');
   assert.equal(await page.locator('[role=alert]').count(), 0);
   await mkdir(new URL('../output/', import.meta.url), { recursive: true });
-  await page.screenshot({ path: fileURLToPath(new URL('../output/overview-real-api-desktop.png', import.meta.url)), fullPage: true });
+  await page.screenshot({ path: fileURLToPath(new URL('../output/redesign-overview-real-api-desktop.png', import.meta.url)), fullPage: true });
 
   await page.goto(`${base}/app/library?wiki=jawiki&sort=active_ms`);
   await page.getByRole('heading', { name: 'Library', exact: true }).waitFor();
@@ -85,7 +86,7 @@ try {
   assert.equal(await page.locator('[role=alert]').count(), 0);
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.locator('body').evaluate(el => el.scrollWidth > window.innerWidth), false);
-  await page.screenshot({ path: fileURLToPath(new URL('../output/privacy-real-api-phone.png', import.meta.url)), fullPage: true });
+  await page.screenshot({ path: fileURLToPath(new URL('../output/redesign-privacy-real-api-phone.png', import.meta.url)), fullPage: true });
 
   // Create our own grant without changing the shared QA user's collection or records.
   const grantResponse = await fetch(`${fixture.api_origin}/api/v1/device-links`, {
@@ -96,6 +97,10 @@ try {
   const grant = await grantResponse.json();
   await page.goto(`${base}/link-device/${grant.link_id}`);
   await page.getByRole('heading', { name: deviceLabel, exact: true }).waitFor();
+  const webGrantResponse = await context.request.get(`${base}/api/v1/device-links/${grant.link_id}`);
+  assert.equal(webGrantResponse.status(), 200);
+  assert.equal(Object.hasOwn(await webGrantResponse.json(), 'user_code'), false, 'Web grant cannot reveal the device confirmation code');
+  assert.equal(await page.getByLabel('端末に表示された確認コード').inputValue(), '');
   await page.getByLabel('端末に表示された確認コード').fill(grant.user_code);
   await page.getByRole('button', { name: 'この端末を承認する' }).click();
   await page.getByRole('heading', { name: '端末の連携を承認しました。', exact: true }).waitFor();
@@ -119,6 +124,6 @@ try {
   assert.equal(await page.locator('body').evaluate(el => el.scrollWidth > window.innerWidth), false);
   assert.deepEqual(problems, []);
   assert.deepEqual(failures, []);
-  await writeFile(new URL('../output/real-api-browser-smoke.json', import.meta.url), JSON.stringify({ result: 'pass', verified_at: new Date().toISOString(), data: 'isolated synthetic QA user', transport: 'real HTTP API with provided PostgreSQL QA server', verified: ['cookie-session-csrf-read', 'overview', 'server-library-filter-sort', 'article-record-delete-cancel', 'activity-source-filter', 'statistics-period-timezone', 'achievements', 'privacy-controls', 'explicit-grant-approval', 'native-grant-exchange', 'own-device-revocation', 'revoked-token-rejected', '390px-no-overflow', ...(crossSource ? ['same-owner-android-chrome-visible-readings'] : [])], cross_source: crossSource, browserErrors: 0, serverErrors: 0 }, null, 2));
-  console.log(`Dashboard actual API browser smoke: PASS (${crossSource ? 14 : 13} checks; synthetic QA identity/metadata, real HTTP/API).`);
+  await writeFile(new URL('../output/redesign-real-api-browser-smoke.json', import.meta.url), JSON.stringify({ result: 'pass', verified_at: new Date().toISOString(), data: 'isolated synthetic QA user', transport: 'real HTTP API with provided PostgreSQL QA server', verified: ['cookie-session-csrf-read', 'overview', 'server-library-filter-sort', 'article-record-delete-cancel', 'activity-source-filter', 'statistics-period-timezone', 'achievements', 'privacy-controls', 'explicit-grant-approval', 'web-grant-code-not-disclosed', 'recent-auth-until-contract', 'native-grant-exchange', 'own-device-revocation', 'revoked-token-rejected', '390px-no-overflow', ...(crossSource ? ['same-owner-android-chrome-visible-readings'] : [])], cross_source: crossSource, browserErrors: 0, serverErrors: 0 }, null, 2));
+  console.log(`Dashboard actual API browser smoke: PASS (${crossSource ? 16 : 15} checks; synthetic QA identity/metadata, real HTTP/API).`);
 } finally { await browser.close(); }

@@ -34,7 +34,7 @@ export function errorMessage(error: unknown): string {
     if (error.code === 'last_identity') return '最後のログイン方法は解除できません。';
     if (['identity_conflict', 'identity_already_linked'].includes(error.code)) return 'このログイン方法は別のアカウントに連携されています。';
     if (error.code === 'provider_already_linked') return 'このログイン方法はすでに追加されています。';
-    if (error.code === 'reauthentication_required') return 'この操作には再認証が必要です。ログインし直してください。';
+    if (error.code === 'reauthentication_required') return 'この操作には、10分以内の本人確認が必要です。連携済みのログイン方法で再認証してください。';
     if (error.status === 403) return 'この操作を完了できません。再読み込みしてログイン状態を確認してください。';
     if (error.status === 410) return 'この端末連携は期限切れです。端末から連携をやり直してください。';
   }
