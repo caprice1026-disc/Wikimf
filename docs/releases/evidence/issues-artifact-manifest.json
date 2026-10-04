@@ -1,0 +1,29 @@
+{
+  "product": "wikimf",
+  "version": "0.1.0",
+  "source_commit": "dd575fb3362a43ca00043248bddf9dcca190c385",
+  "schema_version": 1,
+  "measurement_policy_version": "reading-v1",
+  "server_policy_version": "reading-v1",
+  "extractor_version": "prose-v1",
+  "distribution": "closed local verification; debug APK; unpacked Chrome extension; static Dashboard",
+  "production_release": false,
+  "signing": "local Android debug key; not a release key",
+  "artifacts": [
+    {
+      "file": "wikimf-0.1.0-debug.apk",
+      "bytes": 10308405,
+      "sha256": "45beb27cc11aa74e3976e63e653b2c11042f7a9f4f4161efe5076a7456056e57"
+    },
+    {
+      "file": "wikimf-0.1.0-extension.zip",
+      "bytes": 24033,
+      "sha256": "b6a40b8f1284469f15fded01b0ca26c3c40207c2393138348962b6386374e5d3"
+    },
+    {
+      "file": "wikimf-0.1.0-dashboard.zip",
+      "bytes": 106977,
+      "sha256": "e4bfc94de09cec0f11426888091f1b0b0633bbc19bffb2335e963ec9c7e03821"
+    }
+  ]
+}

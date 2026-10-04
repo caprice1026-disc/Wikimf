@@ -2,6 +2,8 @@
 
 2026-10-04。M10完了時の記録は [verification.md](verification.md) に保持し、この文書に追加修正の証拠を記録する。実Google/GitHub、HTTPS、署名配布、物理端末の受入は [ST計画](ST-plan.md) と [Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13) を継続する。
 
+最終実装sourceは `dd575fb3362a43ca00043248bddf9dcca190c385`。mainへの反映を確認し、[CI全4job](https://github.com/caprice1026-disc/Wikimf/actions/runs/37196169054) が成功した。ローカルの `dist/0.1.0-dd575fb3362a/` にdebug APK・Chrome ZIP・Dashboard ZIPを作成し、[manifest](evidence/issues-artifact-manifest.json) にSHA256を固定した。ZIP内の修正ソース、Dashboardの新画面/再認証、Android DEX内のprivacy修正、共通tracker一致を確認し、ブラウザbundleにテストhook/fixtureが含まれないことも検査した。一般公開用の署名・HTTPS設定・実OAuthは含まない。
+
 ## 確認コードと重要操作
 
 Issue #14は修正前にWeb GETから確認コードを取得でき、Issue #18は古いsessionでaccount削除が成功することを再現した。修正後、開始応答だけにraw codeを返し、DBはsalt付きPBKDF2-HMAC-SHA256で保存する。誤codeはattemptへ加算し、5回で失効する。

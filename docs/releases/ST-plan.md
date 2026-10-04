@@ -29,11 +29,12 @@ P0は閉じた検証の縦断確認と漏洩・二重計上・削除復活の防
 | ST | 確認済みの範囲 | 残る範囲 |
 |---|---|---|
 | ST-05 | API35で明示native focus回帰1件、persistence/Keystore2件、実Overview/PrivacyのIntent1件。Search→ReaderのURL/scroll1800/history/session維持、fragment同session、回転後位置/履歴とnative前後移動、Home後12秒active不変。[Android証跡](../../apps/android/VERIFICATION.md) | 物理端末、OS back/無効境界、外部/new-window/SSL/renderer、Chrome初回画面以後、文字サイズ/lock/kill。回転時はsession再作成を観測したためreload/二重計上条件も残る。 |
-| ST-07 | 実Chrome/エミュレータ→実API/PG→同owner Dashboardの14 checks。両sourceの正の活動とsource別表示件数のAPI一致を確認。[dashboard-postgres.json](evidence/dashboard-postgres.json) | identity/metadataは合成。実provider/実metadata、host閾値直前直後、両端末同時区間、DST等を追加。 |
+| ST-07 | 実Chrome/エミュレータ→実API/PG→同ownerの刷新後Dashboardで16 checks。両sourceの正の活動とsource別表示件数のAPI一致を確認。[dashboard-redesign-api.json](evidence/dashboard-redesign-api.json) | identity/metadataは合成。実provider/実metadata、host閾値直前直後、両端末同時区間、DST等を追加。 |
 | ST-08/09 | 実Chrome worker stop/restart、tab arbitration、offline保存/個別ACK。最終strict schema2件accepted、10,001ms増。[chrome-postgres.json](evidence/chrome-postgres.json)。Android実offline2件→復旧0、累計81,821ms、非隔離。[offline-observation.json](../../apps/android/verification/offline-observation.json) | Android force-stop/reboot、ACK responseのみ紛失、queue容量/実disk障害、実複数window/OS focus、削除/re-link等。 |
-| ST-11 | 保持データ0002→0003 migration、実pg_dump/pg_restoreと最新safety適用の12 checks。[recovery.json](evidence/recovery.json) | migration失敗、検証配備先でのbackup運用/復旧時間とreplay照合。 |
+| ST-09/10追加 | Chrome容量/期限エラーからの再開12判定、Androidの期限/epoch/削除/拒否payload消去・診断100件上限・同意OFF時のURL送信停止を確認。[追加検証](issue-fixes-dashboard.md) | 実disk障害、物理端末での同意/再開、実provider/HTTPS下の削除・復旧を追加。 |
+| ST-11 | 保持データ0002→0004 migration、実pg_dump/pg_restoreと最新safety適用の14 checks。[issues-14-18-recovery.json](evidence/issues-14-18-recovery.json) | migration失敗、検証配備先でのbackup運用/復旧時間とreplay照合。 |
 | ST-12 | local PG、500session/event/interval、warmup3、各30 requests、HTTP TestClientのp95最大219.73msで500ms目標をこの条件では満たした。[performance.json](evidence/performance.json) | TLS/WAN/並行負荷、物理端末電池/体感、静読/分割読書、一週間程度の利用評価。 |
-| ST-13 | `51d3360da45459aabc61643d4cc74a164de0f556`で[remote CI全4job成功](https://github.com/caprice1026-disc/Wikimf/actions/runs/37157922359)。PG75/JVM10/Native4と[3artifactのmanifest](evidence/artifact-manifest.json)を固定 | 実環境のST結果を追加し、公開配布source/hashを再照合してG10を判定。CIに実OAuth/実browser/emulator instrumentationは含まれない。 |
+| ST-13 | 追加修正source `dd575fb3362a43ca00043248bddf9dcca190c385`で[remote CI全4job成功](https://github.com/caprice1026-disc/Wikimf/actions/runs/37196169054)。PG95/JVM10/Native8+pairing1と[3artifactのmanifest](evidence/issues-artifact-manifest.json)を固定。[画面刷新と追加検証](issue-fixes-dashboard.md)を参照 | 実環境のST結果を追加し、公開配布source/hashを再照合してG10を判定。CIに実OAuth/実browser/emulator instrumentationは含まれない。 |
 
 ## ST-01: provider登録
 
@@ -125,7 +126,7 @@ manual-only変更/解除で時間・文字・自動称号を作らないこと�
 
 ## ST-11: migration・復旧
 
-現在は空DB migrationと実PG dump/restoreによる削除/失効safety適用を確認済み。[verify_recovery.py](../../scripts/verify_recovery.py)のreportは受入台帳を参照する。これに加え、QAデータを持つ旧schemaから最終schemaへupgradeし、event/session/interval/identity/owner/制約とreplay統計の前後一致を確認する。
+空DB migrationに加え、QAデータを持つ0002から0004へのupgrade、履歴の保持、連携待ちcodeの失効、既存Web sessionの再認証要求、実PG dump/restore後の削除/失効safety適用を14項目で確認済み。[verify_recovery.py](../../scripts/verify_recovery.py)の[追加report](evidence/issues-14-18-recovery.json)を参照する。検証配備先ではbackup運用・復旧時間とreplay照合を追加で確認する。
 
 別databaseでbackupを採取→書込み/削除/identity解除/epoch更新→最新safety ledgerを保存→古いbackupを復元→最新safety適用→replayを実行する。backupに存在しなかった記事に関する削除markerも安全に扱う。旧token/Web sessionの拒否、manual非復活、collection/publication OFF、再開の明示同意を確認する。削除台帳もbackupと同時点に戻すだけでは削除復活を防げない。
 
@@ -139,7 +140,7 @@ local PG/HTTP TestClientの500session条件では個人画面p95最大219.73ms�
 
 ## ST-13: 最終照合と終了条件
 
-配布source `51d3360`のremote CI全4jobは成功済み。PG75/JVM10/Native4、実Chrome、復旧12項目と3artifactのhash/build対応を固定した。後日のSTで修正があれば、契約生成差分、実PG suite、shared tracker/拡張suite、Dashboard build/fixture/real API、Android unit/lint/build/instrumentation、実Chrome suite、復旧を変更の影響に応じて再実行する。provider/TLS/物理端末の未実施はskip理由とともに残す。CIのunit/build成功を実providerやbrowser/emulatorの確認へ広げない。
+追加修正後の配布source `dd575fb3362a43ca00043248bddf9dcca190c385`のremote CI全4jobは成功済み。PG95/JVM10/Native8+pairing1、実Chrome、復旧14項目と3artifactのhash/build対応を[追加検証記録](issue-fixes-dashboard.md)に固定した。旧M10 source `51d3360`の証跡は履歴として保持する。後日のSTで修正があれば、契約生成差分、実PG suite、shared tracker/拡張suite、Dashboard build/fixture/real API、Android unit/lint/build/instrumentation、実Chrome suite、復旧を変更の影響に応じて再実行する。provider/TLS/物理端末の未実施はskip理由とともに残す。CIのunit/build成功を実providerやbrowser/emulatorの確認へ広げない。
 
 [受入台帳](acceptance-matrix.md)70行とG00～G10を結果で更新し、証跡が最終SHA/配布hashへ対応していることを照合する。重大な漏洩・二重計上・削除復活・検索/戻るの破綻は閉じた検証でも阻止条件。限定検証が可能な状態と、HTTPS/実OAuth/署名/物理端末を含めたリリース受入完了を分けて判定する。M11～M12のfeed/Neighbours/RaceはMVP-Aの残件に混ぜず別バックログにする。
 

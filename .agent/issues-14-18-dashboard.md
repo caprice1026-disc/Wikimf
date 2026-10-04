@@ -9,12 +9,12 @@
 ## Progress
 
 - [x] (2026-10-04) 新規Issue #14〜#18、現在のコード、Dashboard設計書、既存検証環境を確認した。
-- [x] (2026-10-04) #14 のコード非開示・hash保存・migration・Backend回帰を完了した。実端末pairingの再確認を統合時に行う。
+- [x] (2026-10-04) #14 のコード非開示・hash保存・migration・Backend回帰を完了した。実ChromeとAndroidエミュレータのnative pairingも成功した。
 - [x] (2026-10-04) #15/#17 のAndroidデータ削除と送信同意境界を実装し、実エミュレータ8件・JVM10件・build/lintで確認した。
 - [x] (2026-10-04) #16 のChrome復旧処理を実装し、unit12件・実Chrome復旧12判定・既存9判定・実APIpairing/ACKを確認した。
 - [x] (2026-10-04) #18 の直近認証と同一利用者確認、Dashboard導線を検証した。独立レビューで発見したlogout競合とlock待ち期限越えを修正し、PG全95件成功。
 - [x] (2026-10-04) Dashboardの全主要画面を刷新し、desktop/mobile/dark/empty/errorと26操作シナリオを確認した。
-- [ ] READMEと検証記録を更新し、mainへpush、remote SHA/CIとIssueの状態を確認する。
+- [x] (2026-10-04) READMEと検証記録を更新し、実装source dd575fbをmainへpush、remote SHA一致とCI全4job成功を確認した。配布manifestを固定し、Issue #14〜#18を検証結果付きでクローズした。
 
 ## Surprises & Discoveries
 
@@ -38,7 +38,9 @@ AndroidはSyncだけでなくReaderのページ完了時にもresolveを呼ぶ�
 
 Backendは実PG full90件と追加2ケースを含むsecurity suite17件が成功。既存認証suiteでは同時に開始した2つ目のlinkが先行linkによるsession更新で403となるため、以前のprovider重複409からsession変更拒否へ期待値を更新した。データを保持した0002→0004移行と実dump/restoreは14項目成功。実OAuth、HTTPS、署名配布、物理端末の受入は既存Issue #13のSTを継続する。新しい不具合のローカル検証と実プロバイダーの検証を混同しない。
 
-追加修正後はPG全95件、Android JVM10/native8+pairing1件、Chrome unit12/復旧12/既存9判定、Dashboard26 workflowが成功した。Backend92629dc、Chrome01febf0、Android60801e5をmainへ順次pushし各remote SHAとCI成功を確認した。最終Dashboard commitと配布物の対応付けを進める。
+追加修正後はPG全95件、Android JVM10/native8+pairing1件、Chrome unit12/復旧12/既存9判定、Dashboard26 workflowが成功した。Backend92629dc、Chrome01febf0、Android60801e5をmainへ順次pushし各remote SHAとCI成功を確認した。
+
+最終source dd575fb3362a43ca00043248bddf9dcca190c385のmain反映とCI4job成功を確認した。Dashboardは実API16項目も通り、同ownerのAndroid/Chrome履歴を照合した。dist/0.1.0-dd575fb3362aに配布物を保存し、hash、Android DEXの修正、拡張のsource一致、Dashboardの新機能、テストfixture非混入を確認した。残る制約は実provider/HTTPS/物理機/署名のSTである。
 
 ## Context and Orientation
 
@@ -85,3 +87,5 @@ Dashboardは1440pxと390pxを基本に、overflow、コントラスト、keyboar
 更新記録: 2026-10-04、Backend修正の回帰とmigration/復旧の成功、provider再確認の保証範囲を反映した。
 
 更新記録: 2026-10-04、実クライアントの確認、Dashboard刷新、独立レビューによる競合修正と段階pushを反映した。
+
+更新記録: 2026-10-04、最終sourceのremote CIと配布物の対応を記録した。
