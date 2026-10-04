@@ -105,12 +105,12 @@
     {
       "path": "apps/android/app/build/outputs/apk/debug/app-debug.apk",
       "bytes": 10308405,
-      "sha256": "ff44c1177a704138918b70734dedb474b4fe452c735a2f652e944a9f794b6a44"
+      "sha256": "45beb27cc11aa74e3976e63e653b2c11042f7a9f4f4161efe5076a7456056e57"
     },
     {
       "path": "apps/android/app/build/outputs/apk/release/app-release-unsigned.apk",
       "bytes": 7339322,
-      "sha256": "50ca065b45927fe8b569166a8eb7df925cfd0892380c20cfff9a2f82c2a3e573"
+      "sha256": "0c9c757bdfc86062f41de82b36c7903c11cfa0669f4bed9dfe1ab1fa940e9ecd"
     }
   ],
   "build_checks": {
@@ -124,12 +124,15 @@
     "explicit_native_smoke_seconds": 26.046,
     "explicit_dashboard_intent_tests": 1,
     "explicit_dashboard_intent_seconds": 5.356,
-    "native_passed_total": 4,
-    "final_native_suite_seconds": 28.407,
-    "final_native_suite_evidence": "apps/android/verification/native-final-suite.txt",
-    "final_build_verified_at": "2026-10-03T22:16:15.615110+00:00",
+    "native_passed_total": 8,
+    "final_native_suite_seconds": 41.655,
+    "final_native_suite_evidence": "apps/android/verification/privacy-final-suite.txt",
+    "final_build_verified_at": "2026-10-04T10:23:05.812515+00:00",
     "api_destination_credential_boundary": true,
-    "search_retry_after_cooldown": true
+    "search_retry_after_cooldown": true,
+    "native_privacy_tests": 4,
+    "issue_15_quarantine_payload_erasure": true,
+    "issue_17_reading_content_off_boundary": true
   },
   "tracker_asset_sha256": "aff6e2c5b8e9cc76b3bbe4bfc6b03b73019f886db4370095390430dfbe19a431",
   "tracker_matches_source": true,
@@ -148,5 +151,6 @@
     "retry_after": "Seconds / HTTP-date / invalid fallback 30 seconds / overflow",
     "deadline": "Per-wiki process lifetime, monotonic, cannot shorten, cancellable latest query",
     "actual_injected_429_ui": "ST-06 pending"
-  }
+  },
+  "latest_privacy_verification": "apps/android/verification/privacy-regressions.json"
 }

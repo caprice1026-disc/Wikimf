@@ -82,13 +82,37 @@ class Settings(context: Context) {
 data class HistoryEntry(val wiki: String, val key: String, val title: String, val pageId: Long?, val url: String, val description: String? = null)
 data class QueueRow(val id: String, val owner: String, val device: String, val payload: String, val pendingUrl: String?, val attempt: Int)
 
-class LocalStore(context: Context) : SQLiteOpenHelper(context, "wikimf.sqlite", null, 1) {
+class LocalStore(context: Context) : SQLiteOpenHelper(context, "wikimf.sqlite", null, 2) {
+    override fun onConfigure(db: SQLiteDatabase) { db.rawQuery("PRAGMA secure_delete=ON", null).use { check(it.moveToFirst() && it.getInt(0) == 1) } }
+    private fun createOutbox(db: SQLiteDatabase, name: String = "outbox") {
+        db.execSQL("CREATE TABLE $name(id TEXT PRIMARY KEY,owner TEXT NOT NULL,device TEXT NOT NULL,payload TEXT NOT NULL,pending_url TEXT,created INTEGER NOT NULL,attempt INTEGER NOT NULL DEFAULT 0,next_try INTEGER NOT NULL DEFAULT 0)")
+    }
+    private fun createDiagnostics(db: SQLiteDatabase) { db.execSQL("CREATE TABLE diagnostics(id TEXT PRIMARY KEY,owner TEXT NOT NULL,code TEXT NOT NULL,at INTEGER NOT NULL)") }
+    private fun diagnostic(db: SQLiteDatabase, id: String, owner: String, reason: String) {
+        val code = reason.takeIf { it.matches(Regex("[a-z0-9_]{1,64}")) } ?: "rejected"
+        db.insertWithOnConflict("diagnostics", null, ContentValues().apply { put("id", id); put("owner", owner); put("code", code); put("at", System.currentTimeMillis()) }, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+    private fun trimDiagnostics(db: SQLiteDatabase) { db.execSQL("DELETE FROM diagnostics WHERE id NOT IN (SELECT id FROM diagnostics ORDER BY at DESC,rowid DESC LIMIT 100)") }
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE history(owner TEXT NOT NULL,kind TEXT NOT NULL,identity TEXT NOT NULL,wiki TEXT NOT NULL,title TEXT NOT NULL,url TEXT NOT NULL,page_id INTEGER,touched INTEGER NOT NULL,PRIMARY KEY(owner,kind,identity))")
-        db.execSQL("CREATE TABLE outbox(id TEXT PRIMARY KEY,owner TEXT NOT NULL,device TEXT NOT NULL,payload TEXT NOT NULL,pending_url TEXT,created INTEGER NOT NULL,attempt INTEGER NOT NULL DEFAULT 0,next_try INTEGER NOT NULL DEFAULT 0,error TEXT,quarantined INTEGER NOT NULL DEFAULT 0)")
+        createOutbox(db)
+        createDiagnostics(db)
         db.execSQL("CREATE INDEX outbox_owner ON outbox(owner,device,next_try)")
     }
-    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
+        if (old < 2) {
+            createDiagnostics(db)
+            db.rawQuery("SELECT id,owner,error FROM outbox WHERE quarantined=1 ORDER BY created,rowid", null).use { cursor ->
+                while (cursor.moveToNext()) diagnostic(db, cursor.getString(0), cursor.getString(1), if (cursor.isNull(2)) "rejected" else cursor.getString(2))
+            }
+            trimDiagnostics(db)
+            createOutbox(db, "outbox_active")
+            db.execSQL("INSERT INTO outbox_active SELECT id,owner,device,payload,pending_url,created,attempt,next_try FROM outbox WHERE quarantined=0")
+            db.execSQL("DROP TABLE outbox")
+            db.execSQL("ALTER TABLE outbox_active RENAME TO outbox")
+            db.execSQL("CREATE INDEX outbox_owner ON outbox(owner,device,next_try)")
+        }
+    }
     fun remember(owner: String, kind: String, hit: HistoryEntry) {
         val identity = hit.pageId?.let { "${hit.wiki}:$it" } ?: hit.url.substringBefore('#')
         writableDatabase.beginTransaction()
@@ -111,20 +135,44 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "wikimf.sqlite", 
         return writableDatabase.insertWithOnConflict("outbox", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1L
     }
     fun queueBytes(): Long = readableDatabase.rawQuery("SELECT COALESCE(SUM(length(CAST(payload AS BLOB))),0) FROM outbox", null).use { it.moveToFirst(); it.getLong(0) }
-    fun count(owner: String): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox WHERE owner=? AND quarantined=0", arrayOf(owner)).use { it.moveToFirst(); it.getInt(0) }
-    fun quarantined(owner: String): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox WHERE owner=? AND quarantined=1", arrayOf(owner)).use { it.moveToFirst(); it.getInt(0) }
-    fun rows(device: LinkedDevice): List<QueueRow> = readableDatabase.rawQuery("SELECT id,owner,device,payload,pending_url,attempt FROM outbox WHERE owner=? AND device=? AND quarantined=0 AND next_try<=? ORDER BY created, rowid LIMIT 50", arrayOf(device.userId, device.deviceId, System.currentTimeMillis().toString())).use { cursor ->
+    fun count(owner: String): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox WHERE owner=?", arrayOf(owner)).use { it.moveToFirst(); it.getInt(0) }
+    fun quarantined(owner: String): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM diagnostics WHERE owner=?", arrayOf(owner)).use { it.moveToFirst(); it.getInt(0) }
+    fun rows(device: LinkedDevice): List<QueueRow> = readableDatabase.rawQuery("SELECT id,owner,device,payload,pending_url,attempt FROM outbox WHERE owner=? AND device=? AND next_try<=? ORDER BY created, rowid LIMIT 50", arrayOf(device.userId, device.deviceId, System.currentTimeMillis().toString())).use { cursor ->
         buildList { while (cursor.moveToNext()) add(QueueRow(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3), if (cursor.isNull(4)) null else cursor.getString(4), cursor.getInt(5))) }
     }
     fun finalizePending(id: String, event: JSONObject) { writableDatabase.update("outbox", ContentValues().apply { put("payload", event.toString()); putNull("pending_url") }, "id=? AND pending_url IS NOT NULL", arrayOf(id)) }
     fun ack(id: String) { writableDatabase.delete("outbox", "id=?", arrayOf(id)) }
-    fun quarantine(id: String, reason: String) { writableDatabase.update("outbox", ContentValues().apply { put("quarantined", 1); put("error", reason) }, "id=?", arrayOf(id)) }
+    private fun quarantineWhere(where: String, args: Array<String>, reason: String) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            db.rawQuery("SELECT id,owner FROM outbox WHERE $where", args).use { cursor -> while (cursor.moveToNext()) diagnostic(db, cursor.getString(0), cursor.getString(1), reason) }
+            db.delete("outbox", where, args)
+            trimDiagnostics(db)
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+    fun quarantine(id: String, reason: String) { quarantineWhere("id=?", arrayOf(id), reason) }
     fun retry(row: QueueRow, retryAfterMs: Long = 0) { writableDatabase.update("outbox", ContentValues().apply { put("attempt", row.attempt + 1); put("next_try", System.currentTimeMillis() + maxOf(retryAfterMs, SecurityPolicy.nextBackoff(row.attempt)) + kotlin.random.Random.nextLong(500)) }, "id=?", arrayOf(row.id)) }
-    fun discard(owner: String) { writableDatabase.delete("outbox", "owner=?", arrayOf(owner)) }
+    fun discard(owner: String) { writableDatabase.delete("outbox", "owner=?", arrayOf(owner)); writableDatabase.delete("diagnostics", "owner=?", arrayOf(owner)) }
     fun discardEpoch(owner: String, epoch: Int) {
         readableDatabase.rawQuery("SELECT id,payload FROM outbox WHERE owner=?", arrayOf(owner)).use { cursor ->
-            while (cursor.moveToNext()) if (JSONObject(cursor.getString(1)).optInt("recording_epoch") != epoch) quarantine(cursor.getString(0), "recording_epoch_changed")
+            val ids = buildList { while (cursor.moveToNext()) if (runCatching { JSONObject(cursor.getString(1)).optInt("recording_epoch") }.getOrNull() != epoch) add(cursor.getString(0)) }
+            ids.forEach { quarantine(it, "recording_epoch_changed") }
         }
     }
-    fun expire() { writableDatabase.update("outbox", ContentValues().apply { put("quarantined", 1); put("error", "expired_7_days") }, "created<? AND quarantined=0", arrayOf((System.currentTimeMillis() - 7L * 86_400_000L).toString())) }
+    fun discardDeleted(owner: String, markers: org.json.JSONArray) {
+        readableDatabase.rawQuery("SELECT id,payload FROM outbox WHERE owner=?", arrayOf(owner)).use { cursor ->
+            val ids = buildList { while (cursor.moveToNext()) if (deleted(JSONObject(cursor.getString(1)), markers)) add(cursor.getString(0)) }
+            ids.forEach { quarantine(it, "article_deleted") }
+        }
+    }
+    fun deleted(event: JSONObject, markers: org.json.JSONArray): Boolean {
+        for (i in 0 until markers.length()) {
+            val marker = markers.getJSONObject(i)
+            if (event.optString("article_id") == marker.getString("article_id") && java.time.Instant.parse(event.getString("session_started_at")) <= java.time.Instant.parse(marker.getString("deleted_before"))) return true
+        }
+        return false
+    }
+    fun expire() { quarantineWhere("created<?", arrayOf((System.currentTimeMillis() - 7L * 86_400_000L).toString()), "expired_7_days") }
 }

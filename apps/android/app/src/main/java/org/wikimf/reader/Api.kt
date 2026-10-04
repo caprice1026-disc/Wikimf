@@ -38,6 +38,7 @@ class Api(private val settings: Settings) {
         val apiUrl = settings.apiUrl
         require(validBase(apiUrl)) { "API URLにはHTTPSを指定してください" }
         if (device != null && device != settings.device()) throw ApiFailure(401, "device_binding_changed")
+        if (path in setOf("/articles/resolve", "/reading-events/batch") && (device == null || !settings.cloudConsent || !settings.serverEnabled)) throw ApiFailure(403, "recording_disabled")
         val builder = Request.Builder().url(apiUrl + path).header("Accept", "application/json")
         if (device != null) builder.header("Authorization", "Bearer ${device.token}")
         if (body != null) builder.post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -58,6 +59,21 @@ class Api(private val settings: Settings) {
             if (failure is CancellationException) throw failure
             // Offline/older servers retain the cached origin or same-origin fallback.
         }
+    }
+    suspend fun recordingControl(store: LocalStore, device: LinkedDevice): JSONArray {
+        store.expire()
+        val control = request("/me/recording-control", device = device)
+        if (control.getString("user_id") != device.userId || control.getString("device_id") != device.deviceId) throw ApiFailure(403, "owner_mismatch")
+        settings.epoch = control.getInt("recording_epoch")
+        settings.serverEnabled = control.getBoolean("collection_enabled")
+        store.discardEpoch(device.userId, settings.epoch)
+        val markers = control.optJSONArray("deletion_markers") ?: JSONArray()
+        store.discardDeleted(device.userId, markers)
+        return markers
+    }
+    suspend fun resolveArticle(store: LocalStore, url: String, device: LinkedDevice): JSONObject {
+        recordingControl(store, device)
+        return request("/articles/resolve", JSONObject().put("url", url), device)
     }
     suspend fun search(wiki: String, query: String, full: Boolean): List<HistoryEntry> {
         while (true) {
@@ -102,13 +118,8 @@ class SyncEngine(private val context: Context) {
         val store = LocalStore(context)
         val api = Api(settings)
         try {
-            store.expire()
-            val control = api.request("/me/recording-control", device = device)
-            if (control.getString("user_id") != device.userId || control.getString("device_id") != device.deviceId) throw ApiFailure(403, "owner_mismatch")
-            settings.epoch = control.getInt("recording_epoch")
-            settings.serverEnabled = control.getBoolean("collection_enabled")
-            store.discardEpoch(device.userId, settings.epoch)
-            val markers = control.optJSONArray("deletion_markers") ?: JSONArray()
+            val markers = api.recordingControl(store, device)
+            if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件を端末で保持"; return@withContext true }
             val rows = store.rows(device)
             val ready = mutableListOf<Pair<QueueRow, JSONObject>>()
             var size = 0
@@ -121,12 +132,7 @@ class SyncEngine(private val context: Context) {
                     event.put("article_id", article.getString("article_id")).put("wiki", article.getString("wiki")).put("page_id", article.getLong("page_id"))
                     store.finalizePending(row.id, event)
                 }
-                var deleted = false
-                for (i in 0 until markers.length()) {
-                    val marker = markers.getJSONObject(i)
-                    if (event.getString("article_id") == marker.getString("article_id") && java.time.Instant.parse(event.getString("session_started_at")) <= java.time.Instant.parse(marker.getString("deleted_before"))) deleted = true
-                }
-                if (deleted) { store.quarantine(row.id, "article_deleted"); continue }
+                if (store.deleted(event, markers)) { store.quarantine(row.id, "article_deleted"); continue }
                 val bytes = event.toString().toByteArray().size
                 if (size + bytes > 240 * 1024) break
                 size += bytes
@@ -139,6 +145,7 @@ class SyncEngine(private val context: Context) {
             true
         } catch (failure: Exception) {
             if (failure is kotlinx.coroutines.CancellationException) throw failure
+            if (failure is ApiFailure && failure.errorCode == "recording_disabled") { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件を端末で保持"; return@withContext true }
             if (failure is ApiFailure && failure.code in setOf(401, 403)) { settings.status = "端末連携を確認してください"; settings.serverEnabled = false; return@withContext true }
             else settings.status = "同期保留・${store.count(device.userId)}件（再試行可能）"
             store.rows(device).forEach { store.retry(it) }

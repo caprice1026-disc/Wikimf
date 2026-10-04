@@ -1,5 +1,6 @@
 .tooling/
 .gradle/
+.kotlin/
 **/build/
 local.properties
 *.jks

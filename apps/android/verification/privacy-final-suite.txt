@@ -1,0 +1,9 @@
+
+org.wikimf.reader.DashboardLinkIntegrationTest:.
+org.wikimf.reader.PersistenceTest:..
+org.wikimf.reader.PrivacyRegressionTest:....
+org.wikimf.reader.ReaderFocusRegressionTest:.
+
+Time: 41.655
+
+OK (8 tests)

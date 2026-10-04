@@ -239,10 +239,11 @@ class MainActivity : ComponentActivity() {
             item { TextButton(onClick = { store.clearHistory(device?.userId ?: "guest"); changed() }) { Text("端末内の記事履歴をすべて消去") } }
             if (device != null) {
                 item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("クラウド読書記録に同意", Modifier.weight(1f)); Switch(checked = cloudConsent, onCheckedChange = { cloudConsent = it; settings.cloudConsent = it; SyncEngine.schedule(context); changed() }) } }
-                item { Text("記事・時間・本文カバー率を非公開で同期します。Dashboardの収集許可も必要です。本文・入力語・Cookie・認証情報は計測イベントへ含めません。", style = MaterialTheme.typography.bodySmall) }
+                item { Text("記事・時間・本文カバー率を非公開で同期します。Dashboardの収集許可も必要です。OFFの間は未送信を端末で保持し、再同意と収集許可後に同期します。不要な記録は再同意前に破棄できます。本文・入力語・Cookie・認証情報は計測イベントへ含めません。", style = MaterialTheme.typography.bodySmall) }
                 item { Row { Text("この端末で記録を一時停止", Modifier.weight(1f)); Switch(checked = paused, onCheckedChange = { paused = it; settings.paused = it; changed() }) } }
                 item { Text(settings.status + "\n未送信 ${store.count(device.userId)}件・隔離 ${store.quarantined(device.userId)}件") }
                 item { TextButton(onClick = { SyncEngine.schedule(context); changed() }) { Text("同期を再試行") } }
+                if (!cloudConsent || !settings.serverEnabled) item { TextButton(onClick = { store.discard(device.userId); changed() }) { Text("この端末の未送信記録を破棄") } }
                 item { TextButton(onClick = logout) { Text("ログアウト / 端末連携解除") } }
             }
             pairingStatus?.let { item { Text(it) } }
@@ -328,7 +329,12 @@ private class ReaderController(
                         domEligible = true; domPageId = metadata.optLong("id")
                         if (this@ReaderController.settings.localConsent) store.remember(this@ReaderController.settings.device()?.userId ?: "guest", "viewed", HistoryEntry(UrlPolicy.wiki(this@ReaderController.url)!!, "", metadata.getString("title"), metadata.optLong("id").takeIf { it > 0 }, this@ReaderController.url))
                         resolveJob = scope.launch {
-                            article = runCatching { Api(this@ReaderController.settings).request("/articles/resolve", JSONObject().put("url", this@ReaderController.url)) }.getOrNull()
+                            if (!this@ReaderController.settings.cloudConsent || !this@ReaderController.settings.serverEnabled || this@ReaderController.settings.device() == null) return@launch
+                            val device = this@ReaderController.settings.device() ?: return@launch
+                            val frameUrl = this@ReaderController.url
+                            article = try { Api(this@ReaderController.settings).resolveArticle(store, frameUrl, device) }
+                            catch (cancelled: CancellationException) { throw cancelled }
+                            catch (_: Exception) { null }
                             if (generation != pageGeneration) return@launch
                             articleId = article?.optString("article_id")
                             refreshState()
@@ -370,6 +376,7 @@ private class ReaderController(
         }
     }
     fun activeChanged(force: Boolean? = null) {
+        if (!settings.cloudConsent || !settings.serverEnabled || settings.device() == null) resolveJob?.cancel()
         if (contextStarted && (settings.device()?.deviceId != sessionDevice?.deviceId || settings.epoch != sessionEpoch)) { stop("logout"); stateLabel = "" }
         val enabled = (force ?: active()) && settings.cloudConsent && settings.serverEnabled && !settings.paused && settings.device() != null
         if (!enabled && hostActive) { hostActive = false; webView?.evaluateJavascript("window.WKMF_NATIVE?.setActive(false)", null) }

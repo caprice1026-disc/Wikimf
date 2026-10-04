@@ -1,0 +1,90 @@
+{
+  "verified_at": "2026-10-04T10:23:05.812515+00:00",
+  "issues": [
+    15,
+    17
+  ],
+  "environment": {
+    "android_api": 35,
+    "transport": "Actual emulator loopback HTTP, Android OkHttp + SQLite + Keystore",
+    "storage": "Isolated device-protected realm; shared linked Reader credentials/history preserved"
+  },
+  "native_suite": {
+    "tests": 8,
+    "failures": 0,
+    "seconds": 41.655,
+    "classes": {
+      "PrivacyRegressionTest": 4,
+      "PersistenceTest": 2,
+      "ReaderFocusRegressionTest": 1,
+      "DashboardLinkIntegrationTest": 1
+    },
+    "flags": {
+      "native_smoke": true,
+      "native_dashboard_smoke": true
+    },
+    "evidence": "apps/android/verification/privacy-final-suite.txt"
+  },
+  "migration": {
+    "from_version": 1,
+    "to_version": 2,
+    "legacy_quarantined_rows": 220,
+    "legacy_payload_bytes_over_10MiB": true,
+    "active_payload_pending_url_attempt_preserved": true,
+    "article_history_preserved": true,
+    "diagnostic_rows": 100,
+    "diagnostic_fields": [
+      "id",
+      "owner",
+      "code",
+      "at"
+    ],
+    "erased_marker_absent_from_sqlite_file": true
+  },
+  "cleanup": {
+    "expired_7_days_payload_removed": true,
+    "old_epoch_payload_removed": true,
+    "article_deleted_payload_removed_including_future_retry": true,
+    "terminal_reject_payload_removed": true,
+    "diagnostics_bound": 100,
+    "unsafe_diagnostic_code_sanitized": true,
+    "new_valid_enqueue_succeeds": true
+  },
+  "http_boundary": {
+    "cloud_consent_off": "Only GET /api/v1/me/recording-control with empty body",
+    "server_collection_off": "Only GET /api/v1/me/recording-control with empty body",
+    "revoked_during_control": "Only GET /api/v1/me/recording-control with empty body",
+    "control_cleanup_while_off": true,
+    "reconsent": "Control -> resolve -> batch; retained queue drains",
+    "reader_cached_enabled_but_fresh_control_off": "Control only; no article URL",
+    "reader_control_503": "Control only; no article URL",
+    "observed_test_traces": [
+      "Reader collection_off: fresh control only; no article URL",
+      "Reader control_unavailable: fresh control only; no article URL",
+      "consent_off: control only while OFF; resolve + batch after reconsent",
+      "collection_off: control only while OFF; resolve + batch after reconsent",
+      "revoked_during_control: control only while OFF; resolve + batch after reconsent"
+    ]
+  },
+  "live_native_focus": {
+    "real_url": "https://en.wikipedia.org/wiki/Earth",
+    "accepted_active_ms_at_least": 10000,
+    "service": "Actual local API + PostgreSQL; synthetic identity/MediaWiki metadata"
+  },
+  "artifacts": [
+    {
+      "path": "apps/android/app/build/outputs/apk/debug/app-debug.apk",
+      "bytes": 10308405,
+      "sha256": "45beb27cc11aa74e3976e63e653b2c11042f7a9f4f4161efe5076a7456056e57"
+    },
+    {
+      "path": "apps/android/app/build/outputs/apk/release/app-release-unsigned.apk",
+      "bytes": 7339322,
+      "sha256": "0c9c757bdfc86062f41de82b36c7903c11cfa0669f4bed9dfe1ab1fa940e9ecd"
+    }
+  ],
+  "limitations": [
+    "Actual Google/GitHub OAuth, production HTTPS and physical device remain ST",
+    "Loopback fixture does not establish production provider behavior"
+  ]
+}
