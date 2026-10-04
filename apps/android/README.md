@@ -44,6 +44,22 @@ adb -s emulator-5554 shell am instrument -w -e native_smoke true -e class org.wi
 adb -s emulator-5554 shell am instrument -w -e native_dashboard_smoke true -e class org.wikimf.reader.DashboardLinkIntegrationTest org.wikimf.reader.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-The second command exercises the real Compose management buttons against the local API at `10.0.2.2:8000` with Dashboard origin `localhost:5173`. It captures the browser intents without signing in or accepting browser terms. Without their explicit flags, these external-service tests are skipped; the default runner's total is not evidence that they passed. [VERIFICATION.md](VERIFICATION.md) records the actual emulator run and its limits. An unsigned release APK can be built with `build.ps1 -Tasks assembleRelease`; the final release identifier, HTTPS API address and signing key must be supplied before distribution.
+The second command exercises the real Compose management buttons against the local API at `10.0.2.2:8000` with Dashboard origin `localhost:5173`. It captures the browser intents without signing in or accepting browser terms. Without their explicit flags, these external-service tests are skipped; the default runner's total is not evidence that they passed. [VERIFICATION.md](VERIFICATION.md) records the actual emulator run and its limits. `build.ps1 -Tasks assembleRelease` remains unsigned unless all release signing variables are supplied; use the staging procedure below for an installable ST APK.
 
 Debug builds alone permit HTTP to `10.0.2.2`, `127.0.0.1` and `localhost` for local integration tests. Release builds require HTTPS. No arbitrary external cleartext API is accepted.
+
+## Signed release APK for one-device ST
+
+Complete emulator function checks, build the release APK, install it on one personal Android, verify real Wikipedia/API/PG/Dashboard end to end, then focus on lifecycle/network/Keystore/browser/IME behavior and use it normally for 3–7 days. Emulator success is not physical-device acceptance. The [Japanese device ST guide](../../docs/releases/android-device-ST.md) contains the concrete sequence and prerequisites.
+
+```powershell
+# First time only: local staging key, separate from debug and future public-release keys.
+powershell -ExecutionPolicy Bypass -File apps/android/release-signing.ps1 -Create
+powershell -ExecutionPolicy Bypass -File apps/android/build.ps1 -StagingRelease
+```
+
+The signed APK is `app/build/outputs/apk/release/app-release.apk`. The helper validates its signature, expected certificate, separation from the current debug certificate, and compiled manifest boundaries. Release remains non-debuggable and rejects cleartext; WebView debugging stays disabled. R8/resource shrinking are not enabled by the current release configuration.
+
+Staging material stays in ignored `.local/signing/`; its password is protected with Windows DPAPI and access is limited to the current user and SYSTEM. Keep this key for later ST updates. CI may instead supply a PKCS12 keystore and all four `WIKIMF_SIGNING_KEYSTORE`, `WIKIMF_SIGNING_STORE_PASSWORD`, `WIKIMF_SIGNING_KEY_ALIAS`, `WIKIMF_SIGNING_KEY_PASSWORD` environment variables through its secret store. Do not put key material or passwords in Git, logs, or the APK distribution folder.
+
+The API is configurable in Account. `https://wikimf.example/api/v1` is a placeholder, not a working hosted service. Real HTTPS/OAuth remain prerequisites for physical cloud ST. A release APK signed by the ST key cannot overwrite the existing debug-signed app; do not uninstall an existing app before checking its unsent data. Use a separate AVD for release smoke checks and preserve the original debug install.

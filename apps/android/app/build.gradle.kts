@@ -1,10 +1,29 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose") }
 
+val releaseSigning = listOf("WIKIMF_SIGNING_KEYSTORE", "WIKIMF_SIGNING_STORE_PASSWORD", "WIKIMF_SIGNING_KEY_ALIAS", "WIKIMF_SIGNING_KEY_PASSWORD")
+    .associateWith { providers.environmentVariable(it).orNull?.takeIf(String::isNotBlank) }
+check(releaseSigning.values.all { it == null } || releaseSigning.values.all { it != null }) {
+    "Release signing requires all four WIKIMF_SIGNING_* environment variables."
+}
+
 android {
     namespace = "org.wikimf.reader"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
     signingConfigs.getByName("debug") { storeFile = rootProject.file(".tooling/debug.keystore") }
+    if (releaseSigning.values.all { it != null }) {
+        signingConfigs.create("release") {
+            storeFile = rootProject.file(releaseSigning.getValue("WIKIMF_SIGNING_KEYSTORE")!!)
+            storeType = "PKCS12"
+            storePassword = releaseSigning.getValue("WIKIMF_SIGNING_STORE_PASSWORD")
+            keyAlias = releaseSigning.getValue("WIKIMF_SIGNING_KEY_ALIAS")
+            keyPassword = releaseSigning.getValue("WIKIMF_SIGNING_KEY_PASSWORD")
+        }
+    }
+    buildTypes.getByName("release") {
+        isDebuggable = false
+        signingConfig = signingConfigs.findByName("release")
+    }
     defaultConfig {
         applicationId = "org.wikimf.reader"
         minSdk = 26

@@ -6,7 +6,7 @@ Wikipedia の読書記録を、自分の非公開履歴・統計へまとめる�
 
 M0〜M10の機能を実装し、PostgreSQL・実Chrome・Android15エミュレータで閉じた検証を完了しました。一般公開前に必要な実OAuth、HTTPS配備、物理実機、署名と継続利用の確認は [ST計画](docs/releases/ST-plan.md) と [Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13) に残しています。
 
-Androidは「エミュレーターで機能確認 → ST専用鍵で署名したrelease APK → 自分の実機1台へインストール → 実Wikipedia/Backendで縦断確認 → 実機固有の挙動 → 3〜7日の普段使い」の順で進めます。実機では画面OFF/復帰、回線切替と未送信の再同期、外部ブラウザ連携、Keystore、日本語IMEを重点的に確認します。HTTPS接続先は未準備のため、用意後にAccountで設定します。
+Androidは「エミュレーターで機能確認 → ST専用鍵で署名したrelease APK → 自分の実機1台へインストール → 実Wikipedia/Backendで縦断確認 → 実機固有の挙動 → 3〜7日の普段使い」の順で進めます。実機では画面OFF/復帰、回線切替と未送信の再同期、外部ブラウザ連携、Keystore、日本語IMEを重点的に確認します。HTTPS接続先は未準備のため、用意後にAccountで設定します。[ST署名・実機への移行手順](docs/releases/android-device-ST.md) にビルドと確認項目をまとめています。
 
 Webダッシュボードは、読書履歴を中心にした白・セージ・深緑の画面へ刷新しました。期間別チャート、記事の状態と本文表示率、ライブラリ、設定を統一し、モバイルの下部ナビゲーションとダークテーマに対応しています。[画面と追加検証](docs/releases/issue-fixes-dashboard.md) に、Issue #14〜#18の修正結果をまとめています。
 
@@ -91,4 +91,4 @@ PGテストは専用schemaを使用します。`TEST_DATABASE_URL`未設定時�
 
 復旧・性能スクリプトは隔離DB/schemaを作成できるローカル検証権限を必要とします。既存DBの保持データを削除しません。Chromeの実デバッグ、Androidの正の時間/coverage/ACK、同ユーザーDashboard表示、実pg_dump/pg_restoreを確認しています。合成provider/記事metadataを使った確認を実OAuthの成功とは数えません。
 
-[検証結果・既知の制約](docs/releases/verification.md)、[70ケース受入台帳](docs/releases/acceptance-matrix.md)、[復旧・配布手順](docs/releases/operations.md) に結果を記録します。配布ビルドをcommitしたソースへ対応付けるには `python scripts/package_release.py` を実行します。出力は `dist/0.1.0-<commit>/` のdebug APK、拡張ZIP、Dashboard ZIP、SHA256付きmanifestです。
+[検証結果・既知の制約](docs/releases/verification.md)、[70ケース受入台帳](docs/releases/acceptance-matrix.md)、[復旧・配布手順](docs/releases/operations.md) に結果を記録します。既存の `python scripts/package_release.py` は `dist/0.1.0-<commit>/` にdebug APK、拡張ZIP、Dashboard ZIP、SHA256付きmanifestを出力します。実機ST向けの署名済みrelease APKは [ST手順](docs/releases/android-device-ST.md) の `build.ps1 -StagingRelease` で作成します。

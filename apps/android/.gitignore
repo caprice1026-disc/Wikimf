@@ -1,4 +1,5 @@
 .tooling/
+.local/
 .gradle/
 .kotlin/
 **/build/
