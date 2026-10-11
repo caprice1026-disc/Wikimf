@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, ForeignKeyConstraint, Integer, JSON, String, UniqueConstraint, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy.engine import URL, make_url
 
 
 def now():
@@ -173,10 +174,19 @@ class DeletionMarker(Base):
     deleted_before: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+def configured_database_url():
+    if os.getenv("DATABASE_HOST"):
+        return URL.create("postgresql+psycopg", username=os.getenv("DATABASE_USER", "wikimf"),
+                          password=os.getenv("DATABASE_PASSWORD", "wikimf"), host=os.environ["DATABASE_HOST"],
+                          port=int(os.getenv("DATABASE_PORT", "5432")), database=os.getenv("DATABASE_NAME", "wikimf"))
+    return make_url(os.getenv("DATABASE_URL", "postgresql+psycopg://wikimf:wikimf@127.0.0.1:54329/wikimf"))
+
+
 def database(url=None):
-    url = url or os.getenv("DATABASE_URL", "postgresql+psycopg://wikimf:wikimf@127.0.0.1:54329/wikimf")
-    engine = create_engine(url, pool_pre_ping=True, hide_parameters=True, connect_args={"check_same_thread": False} if url.startswith("sqlite") else {})
-    if url.startswith("sqlite"):
+    url = make_url(url) if url is not None else configured_database_url()
+    sqlite = url.get_backend_name() == "sqlite"
+    engine = create_engine(url, pool_pre_ping=True, hide_parameters=True, connect_args={"check_same_thread": False} if sqlite else {})
+    if sqlite:
         @event.listens_for(engine, "connect")
         def enforce_foreign_keys(connection, _):
             connection.execute("PRAGMA foreign_keys=ON")

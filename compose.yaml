@@ -20,7 +20,11 @@ services:
       dockerfile: apps/backend/Dockerfile
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg://wikimf:${POSTGRES_PASSWORD:-wikimf}@db:5432/wikimf
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: wikimf
+      DATABASE_USER: wikimf
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-wikimf}
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:

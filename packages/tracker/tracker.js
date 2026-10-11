@@ -131,7 +131,9 @@ export class ReadingSession {
   tick({ now, mono, active, ratios = [], scrollRatio = 0 }) {
     if (this.closed) return;
     const delta = mono - this.lastMono, wallDelta = now - this.lastWall;
-    if (delta < 0 || Math.abs(wallDelta - delta) > 2000) this.clockChanged = true;
+    if (wallDelta < 0 || delta < 0 || Math.abs(wallDelta - delta) > 2000) this.clockChanged = true;
+    // Retain the last valid wall sample, including pending spans, for the close.
+    if (this.clockChanged) return;
     const recent = this.lastMono - this.lastInteraction < POLICY.idleMs;
     const accepted = active && recent && this.lastWall >= this.intervalStart && delta > 0 && delta <= POLICY.maxTickMs && !this.clockChanged ?
       Math.floor(Math.min(delta, Math.max(0, wallDelta), Math.max(0, this.lastInteraction + POLICY.idleMs - this.lastMono))) : 0;
@@ -155,6 +157,8 @@ export class ReadingSession {
   }
   event(type, now = this.lastWall, reason) {
     if (this.closed) return null;
+    if (now < this.lastWall) this.clockChanged = true;
+    if (this.clockChanged) now = this.lastWall;
     if (type !== 'session.opened' && (now < this.intervalStart || (type === 'reading.observed' && now === this.intervalStart))) return null;
     const event = { event_id: this.uuid(), type, device_id: this.deviceId, session_id: this.id,
       session_started_at: new Date(this.startedAt).toISOString(), seq: this.seq++, source: this.source,
@@ -215,7 +219,7 @@ export class DOMTracker {
     const win = this.doc.defaultView, mono = performance.now(), now = Date.now();
     this.flushBeforeIntervalLimit(now);
     const active = this.enabled && this.doc.visibilityState === 'visible' && this.doc.hasFocus() && this.host.active();
-    if (active && !this.wasActive) {
+    if (active && !this.wasActive && now >= this.session.lastWall) {
       this.session.lastWall = now; this.session.lastMono = mono; this.session.interact(mono);
     }
     this.wasActive = active;
@@ -245,7 +249,7 @@ export class DOMTracker {
       this.doc.removeEventListener('visibilitychange', this.visibility);
       this.doc.defaultView.removeEventListener('blur', this.visibility); this.doc.defaultView.removeEventListener('focus', this.visibility);
     }
-    const now = Date.now(); this.flushBeforeIntervalLimit(now);
+    const now = this.session?.clockChanged ? this.session.lastWall : Date.now(); this.flushBeforeIntervalLimit(now);
     const event = this.session?.event('session.closed', now, reason);
     this.enabled = false; this.session = null;
     if (event) return this.host.persist(event);

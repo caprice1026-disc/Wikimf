@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { POLICY, articleLocation, codepointCount, chunkSizes, excludedElement, visibleRatio, viewportChunks, inferState, ReadingSession, DOMTracker } from '../tracker.js';
+import { validateObservation } from '../../../apps/extension/src/outbox.js';
 const time = Date.UTC(2026,9,4,0);
 const uuid = () => crypto.randomUUID();
 function session(overrides = {}) {
@@ -50,6 +51,32 @@ function resumeOneSecond(tracker, clock) {
   clock.active = true; clock.mono = 102000; tracker.tick();
   clock.mono = 103000; tracker.tick(); tracker.flush();
 }
+test('1–2000ms wall reversals preserve valid pending time across flushes in both hosts', () => {
+  for (const source of ['chrome_extension', 'android_reader']) for (const reversal of [1, 500, 1500, 2000]) for (const flushed of [false, true]) {
+    const reading = session({ source }), events = [reading.event('session.opened')];
+    reading.tick({ now: time + 3000, mono: 3000, active: false });
+    reading.tick({ now: time + 4000, mono: 4000, active: true });
+    if (flushed) events.push(reading.event('reading.observed'));
+    reading.tick({ now: time + 4000 - reversal, mono: 5000, active: true });
+    assert.equal(reading.clockChanged, true);
+    events.push(reading.event('session.closed', time + 4000 - reversal, 'clock_changed'));
+    assertIntervals(events); assert.ok(events.every(validateObservation));
+    assert.equal(events.at(-1).progress.active_ms_total, 1000);
+    assert.equal(events.at(-1).occurred_at, new Date(time + 4000).toISOString());
+  }
+});
+test('DOM host closes at its last valid sample and requests a fresh session after reversal', () => {
+  suspendedTracker(({ tracker, clock, events }) => {
+    let restarted = 0; tracker.host.restart = () => restarted++;
+    clock.mono = 1000; tracker.tick(); clock.mono = 2000; clock.wall = 999; tracker.tick();
+    assert.equal(tracker.session, null); assert.equal(restarted, 1);
+    assertIntervals(events); assert.ok(events.every(validateObservation));
+    assert.equal(events.at(-1).reason, 'clock_changed'); assert.equal(events.at(-1).progress.active_ms_total, 1000);
+    const fresh = session({ now: time + 999, mono: 2000 });
+    fresh.tick({ now: time + 1999, mono: 3000, active: true });
+    assert.ok(validateObservation(fresh.event('reading.observed')));
+  });
+});
 test('URL boundary excludes credentials, lookalikes, old revisions, and fragments do not change article identity', () => {
   assert.deepEqual(articleLocation('https://ja.wikipedia.org/wiki/A_B#Section'), { wiki: 'jawiki', title: 'A B' });
   assert.deepEqual(articleLocation('https://en.wikipedia.org/w/index.php?title=Earth&action=view'), { wiki: 'enwiki', title: 'Earth' });

@@ -12,6 +12,7 @@ function render(state) {
   const article=state.current_article,states={viewed:'閲覧',partial:'途中まで読んだ',completed:'読了'};
   $('article').textContent=article ? `${article.title} · ${states[article.state]||'計測中'}${article.evidence==='self_reported'?'（自分で設定）':'（自動推定）'}` : '現在の記事の記録は Dashboard で確認できます';
   $('recording').checked = state.recording; $('recording').disabled = !state.linked;
+  $('sendQueued').checked = state.sendQueued; $('sendQueued').disabled = !state.linked;
   $('pair').hidden = state.linked; $('dashboard').href = state.dashboard_url;
   $('pairing').textContent = state.pairing ? `ブラウザで承認してください。確認コード: ${state.pairing.user_code}` : '';
   for (const id of ['sync','discard','logout','logoutDiscard']) $(id).disabled = !state.linked;

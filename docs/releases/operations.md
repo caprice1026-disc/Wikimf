@@ -8,6 +8,10 @@ Python 3.13 / PostgreSQL 17.6、Node 24（ローカルは22.14でも確認）、
 
 `.env.example` をもとに運用者が `ENVIRONMENT=production`、`API_ORIGIN`、`DASHBOARD_ORIGIN`、独立した十分長い `SESSION_SECRET`、DBパスワード、Google/GitHub client ID/secretを用意する。値はGit・Issue・配布物へ含めない。provider callbackは `/api/v1/auth/{provider}/callback`。DashboardのAPIは同originなら既定 `/api/v1`、別originならbuild時の `VITE_API_BASE_URL` で指定する。拡張は `WIKIMF_API_ORIGIN` と `WIKIMF_DASHBOARD_ORIGIN` を指定して再buildする。AndroidのAccountでHTTPS API URLを設定する。
 
+Composeは生の `POSTGRES_PASSWORD` をDBとBackendの個別接続項目へ渡し、BackendとAlembicはSQLAlchemy `URL.create` で接続する。`@` や文字どおりの `%40` を手でエンコードしない。`DATABASE_HOST` がある場合は `DATABASE_USER/PASSWORD/PORT/NAME` が `DATABASE_URL` より優先する。直接起動時の `DATABASE_URL` は従来どおりURIとして正しくpercent-encodeする。特殊文字や `$` を含むComposeのenv値は `.env` の単一引用符を使って意図しない展開を防ぐ。
+
+既存volumeで `POSTGRES_PASSWORD` を変更しても既存のDBロールのパスワードは変わらない。既存データをbackupし、管理接続でDBロールの資格情報を更新したうえでBackend設定を揃える。認証を直すためにvolumeを削除しない。`python scripts/verify_compose_passwords.py` は隔離projectで英数字・`@`・`%40` のmigration/healthと同じvolumeの再起動を検証し、終了時にはコンテナだけを停止して検証volumeを保持する。
+
 TLS proxyでHTTPS、HSTS、集約rate limit、最大request bodyを設定する。個人API・公開プロフィール・認証応答はcacheしない。proxy/access logへquery、本文、Cookie、Authorizationを残さない。現行APIのrate limitはprocess単位なので、複数workerの上限はproxy側で揃える。コンテナDBのポートはloopbackに限定している。
 
 まず保持データのbackupを取り、依存をlockファイルから導入して `alembic upgrade head` を実行する。`GET /health` のschema/policyとmigration head、Dashboard、端末連携、観測ACK、非公開APIの認証を確認してから利用を開始する。migrationのdowngradeは空の隔離DBでのみ確認済み。保持データのある本番DBをdowngradeする手順にはせず、旧版への復帰はbackupと安全台帳で行う。

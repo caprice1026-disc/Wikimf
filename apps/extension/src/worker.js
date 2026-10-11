@@ -79,13 +79,13 @@ async function sendBatch(auth, events) {
   if (result.recording_epoch !== auth.recording_epoch) await control(auth);
 }
 async function sync(force = false) {
-  if (syncing) return syncing;
+  if (syncing) return force ? syncing.then(() => sync(true)) : syncing;
   syncing = (async () => {
     await ready;
     const auth = await owner(), options = await settings();
     retryAt = Math.max(retryAt, (await storage.get('retryAt')).retryAt || 0);
     failures = Math.max(failures, (await storage.get('retryState')).retryState?.failures || 0);
-    if (!auth || !options.sendQueued || (!force && Date.now() < retryAt)) return;
+    if (!auth || (!force && (!options.sendQueued || Date.now() < retryAt))) return;
     try {
       const remote = await control(auth);
       if (!remote.collection_enabled) { await setProblem('server_paused'); return; }
@@ -153,7 +153,7 @@ async function status() {
       }
     } catch { /* The persisted queue status is available even when article metadata is offline. */ }
   }
-  return { linked: !!auth, display_name: auth?.display_name, recording: options.recording,
+  return { linked: !!auth, display_name: auth?.display_name, recording: options.recording, sendQueued: !!options.sendQueued,
     recording_enabled: !!auth && options.recording && !recordingBlocked(code) && stored.control?.collection_enabled !== false,
     queued: state.rows.filter(row => row.owner.user_id === auth?.user_id && row.owner.device_id === auth?.device_id).length,
     rejected: state.quarantine.length, discarded: state.lossCount, sync: code,
@@ -167,10 +167,15 @@ async function contentMessage(message, sender) {
     const tab = await focusedTab(api);
     const remote = (await storage.get('control')).control;
     const denied = recordingBlocked((await storage.get('syncStatus')).syncStatus?.code);
-    return { enabled: !denied && remote?.collection_enabled !== false && tab?.id === sender.tab.id,
+    const binding = bindings.get(sender.tab.id) || (await api.storage.session.get('binding:' + sender.tab.id))['binding:' + sender.tab.id];
+    const deleted = remote?.deletion_markers?.some(marker => marker.article_id === binding?.article_id && Date.now() <= Date.parse(marker.deleted_before));
+    return { enabled: !denied && !deleted && remote?.collection_enabled === true && tab?.id === sender.tab.id,
       lease_until: Date.now() + 15000 };
   }
   if (message.type === 'article.resolve') {
+    const remote = await control(auth);
+    // Recheck local state after the network wait before disclosing an article URL.
+    if (!remote.collection_enabled || !(await settings()).recording || (await owner())?.device_id !== auth.device_id) return { enabled: false };
     const location = articleLocation(sender.url);
     const canonical = new URL(sender.url); canonical.hash = ''; canonical.search = '';
     if (canonical.pathname === '/w/index.php') {
@@ -178,11 +183,12 @@ async function contentMessage(message, sender) {
     }
     const response = await request('/articles/resolve', { method: 'POST', auth, body: { url: canonical.href } });
     if (!response.ok) return { enabled: false, code: 'article_unresolved' };
-    const article = await response.json(), remote = await control(auth);
+    const article = await response.json();
     if (article.namespace !== 0 || !article.trackable || !remote.collection_enabled) return { enabled: false };
     const binding = { document_id: sender.documentId, user_id: auth.user_id, device_id: auth.device_id, article_id: article.article_id, wiki: article.wiki, page_id: article.page_id };
     bindings.set(sender.tab.id, binding);
     await api.storage.session.set({ ['binding:' + sender.tab.id]: binding });
+    if (remote.deletion_markers?.some(marker => marker.article_id === article.article_id && Date.now() <= Date.parse(marker.deleted_before))) return { enabled: false };
     return { enabled: true, article, device_id: auth.device_id, recording_epoch: remote.recording_epoch, client_version: CLIENT_VERSION };
   }
   if (message.type === 'observation') {
