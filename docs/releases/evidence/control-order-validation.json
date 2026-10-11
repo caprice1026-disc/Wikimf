@@ -1,0 +1,116 @@
+{
+  "date_utc": "2026-10-11",
+  "base_commit": "2803c7907ae9de7b769f77def2a4aad21086f121",
+  "code_commit": "8a2ca25d43492a56b1742370989855b1f9f1b1dc",
+  "environment": {
+    "python": "3.12.14",
+    "postgresql": "16.2",
+    "node": "24.19.0",
+    "android_focused_java": "21",
+    "kotlin": "2.0.21",
+    "android_gradle_sdk": null
+  },
+  "checks": [
+    {
+      "name": "backend_postgresql_enabled",
+      "passed": 121,
+      "skipped": 0,
+      "details": "Includes five explicit SQLite export snapshot cases; PostgreSQL row-lock and isolation checks executed."
+    },
+    {
+      "name": "backend_sqlite_only",
+      "passed": 114,
+      "skipped": 7,
+      "details": "Seven PostgreSQL-only concurrency/lock cases skipped."
+    },
+    {
+      "name": "concurrent_authenticated_stats",
+      "passed_requests": 15,
+      "http_status": 200,
+      "elapsed_seconds": 0.093,
+      "pool_size": 5,
+      "max_overflow": 10,
+      "pool_timeout_seconds": 30
+    },
+    {
+      "name": "contracts",
+      "result": "passed"
+    },
+    {
+      "name": "backend_pg_dump_restore",
+      "result": "passed",
+      "details": "Actual PostgreSQL dump/restore and deletion/authentication safety drill."
+    },
+    {
+      "name": "backend_performance",
+      "result": "passed",
+      "events": 500,
+      "requests_per_endpoint": 30,
+      "stats_p95_ms": 102.85,
+      "target_p95_ms": 500,
+      "transport": "in-process HTTP TestClient with real PostgreSQL; no TLS or WAN"
+    },
+    {
+      "name": "tracker",
+      "passed": 17,
+      "skipped": 0,
+      "build": "passed"
+    },
+    {
+      "name": "extension",
+      "result": "passed",
+      "passed": 50,
+      "skipped": 0,
+      "build": "passed",
+      "syntax": "passed"
+    },
+    {
+      "name": "dashboard",
+      "date_format_unit": "passed",
+      "typescript": "passed",
+      "production_build": "passed"
+    },
+    {
+      "name": "android_focused_jvm",
+      "passed": 36,
+      "jvm_unit_tests": 17,
+      "committed_native_control_methods_with_platform_doubles": 7,
+      "http_transport_tests": 2,
+      "source_extracted_reader_tests": 10,
+      "native_execution": false,
+      "details": "Current product Api including SyncEngine compiled with real pinned OkHttp; Android, WorkManager, credential and persistence boundaries modeled."
+    },
+    {
+      "name": "independent_android_http_error_races",
+      "passed": 2,
+      "details": "Body-close and queued-exception boundaries reject superseded failures."
+    }
+  ],
+  "unrun": [
+    "Android Gradle aggregate/build/lint on pinned JDK17/Gradle8.9/SDK35",
+    "Actual Android instrumentation including extended ReaderLifecycleRegressionTest",
+    "Real Android SQLite/Keystore/WebView checks",
+    "Actual Chrome/MV3: Chromium socket creation denied (EPERM)",
+    "Docker Compose integration",
+    "Signed release APK",
+    "Real HTTPS/OAuth/physical-device acceptance",
+    "Three-to-seven-day physical-device use"
+  ],
+  "signing": {
+    "new_apk_created": false,
+    "new_credentials_created": false,
+    "identity_changed": false,
+    "deferred_reason": "User confirms HTTPS endpoint not prepared; existing ST signing environment unavailable."
+  },
+  "publication": {
+    "pushed": false,
+    "pull_request_created": false,
+    "deployed": false
+  },
+  "notes": [
+    "PostgreSQL-enabled results are from 16.2, not deployment target 17.6. Existing recovery/performance scripts hard-code 17.6 in raw output; this report records the actual server version.",
+    "The earlier 87ad275 staging APK contains neither issue 19–27 fixes nor this follow-up.",
+    "Source-only native tests and JVM doubles are not Android-device acceptance.",
+    "Control ordering is client request-generation based; the unchanged HTTP protocol does not carry a server snapshot revision."
+  ]
+}

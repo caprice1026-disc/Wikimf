@@ -1,8 +1,10 @@
 # Android verification — 2026-10-04 JST
 
+2026-10-11 update: [Issue #19–#27 verification](../../docs/releases/issue-fixes-19-27.md) records subsequent API35 fixture regressions. [Control-order follow-up](../../docs/releases/control-order-regressions.md) records the independently reproduced stale-response race, its repair and current checks/limits. Counts and source identities below remain historical. The signed `87ad275` APK does not contain those fixes; it must be rebuilt with the existing ST key before current-source physical acceptance.
+
 The latest emulator ST used API 35 x86_64, Windows Hypervisor Platform and WebView 124.0.6367.219. Search, article DOM and MediaWiki metadata used actual Japanese and English Wikipedia. Native pairing, recording, item ACKs, deletion, statistics and background recovery used a dedicated local FastAPI/PostgreSQL QA account at port 8002, with Dashboard at port 5174. Only the QA identity was synthetic. Production OAuth and deployed HTTPS are not covered.
 
-## Latest emulator ST — source `87ad275e62ddba6a83d8467b0ab58e568bbad5ad`
+## Recorded emulator ST — source `87ad275e62ddba6a83d8467b0ab58e568bbad5ad`
 
 [Compact results](verification/emulator-st-summary.json) contain assertions, flags, artifact SHA-256 and remaining ST. [Timestamped observations](verification/emulator-st-observations.json) retain public event structure, immutable queue hashes, native UI, process IDs and actual API results without authentication values.
 

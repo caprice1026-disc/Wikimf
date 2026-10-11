@@ -1,5 +1,7 @@
 # MVP-AのST計画
 
+2026-10-11追記: [#19〜#27の検証](issue-fixes-19-27.md) 後に見つかった収集control順序、接続pool、停止設定の回帰は [追加修正記録](control-order-regressions.md) をPhase 1の前提に加える。旧 `87ad275` 署名APKはこれらの修正を含まないため、Phase 2では同じST鍵を用い、検証済みsourceと新APK hashを照合する。
+
 更新日: 2026-10-04。実装済み機能の残るシステムテスト（ST）を実環境へ移すための手順。ケースごとの現在地は[受入台帳](acceptance-matrix.md)、仕様の基準は[ADR](../adr/0001-mvp-contract.md)と[実装計画M10](../wikimf-implementation-plan-v0.1.md)。残件は[追跡Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13)で管理する。Androidはエミュレーターの機能確認後にST用署名済みrelease APKを作成し、ユーザー自身の実機1台で縦断確認と3〜7日の自己利用を行う方針へ変更した。実OAuth、HTTPS配備、物理端末の操作は必要な環境が揃ってから実施し、エミュレーター合格を実機合格に置き換えない。
 
 ## Androidの6段階の進め方

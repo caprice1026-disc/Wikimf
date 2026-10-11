@@ -4,6 +4,8 @@
 
 ## 作成したST用APK
 
+注意: 以下の `87ad275` APKは旧版で、#19〜#27と [収集制御・接続・停止設定の追加修正](control-order-regressions.md) を含まない。修正版STには検証済みの最新対象sourceを既存ST鍵で再buildし、source SHA・APK hash・証明書digestを新しく記録する。旧版の受入結果を修正版の合格には用いない。
+
 2026-10-04、下記のcommitからrelease APKを作成した。APKはローカルの `dist/android-st-0.1.0-87ad275e62dd/` に保存し、Gitにはソースと [配布manifest](evidence/android-st-artifact-manifest.json) を記録している。
 
 | 項目 | 値 |

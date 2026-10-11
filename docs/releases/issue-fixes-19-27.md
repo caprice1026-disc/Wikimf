@@ -2,6 +2,10 @@
 
 2026-10-11。ユーザーの指示によりmainへ直接pushする。実OAuth・HTTPS・物理Android・継続利用は未準備と確認したため、#4/#11/#12/#13はOPENを維持する。実装計画は [.agent/issues-19-27.md](../../.agent/issues-19-27.md)。
 
+## 追加レビュー後の状態
+
+以下は `52abc0d` の修正と当時の検証記録である。その後、#19の接続pool待ち合い、#20/#23の古いcontrol応答、#21の停止送信希望と複数batch解除を独立に再現した。追加の実装・回帰結果とSTの現在地は [収集制御・接続・停止設定の追加修正](control-order-regressions.md) を参照する。ここに記録した過去のCI成功だけを、これらの競合や最新APKの合格根拠にしない。
+
 ## Backend・配備
 
 #19: 投影のイベント・session・interval・記事・手動判定を専用の固定snapshotで読む。PostgreSQLはREPEATABLE READ、SQLiteは明示BEGINを使う。同期や削除を受け付けるtransactionの隔離設定・Userロックは変更しない。観測がないsessionも投影対象にしない。

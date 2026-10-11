@@ -6,6 +6,8 @@ APIは `/api/v1`、具体形は `packages/contracts/api.md`。Pydanticがイベ�
 
 PG User行ロックで同一利用者のイベント受理・削除・設定変更を直列化する。受理順のIDを保持し、未計上区間をそのsessionへ割り当てる。読了にも割当後時間を使い、別sessionの時間を借りない。raw eventとは別に正規化interval表を保存する。UIと再計算は同じ純粋replayを使用する。閉じた少人数版ではread時に再計算し、測定した限界を記録する。汎用projection基盤は追加しない。
 
+読み取り専用の投影は認証前から同じrequestのSessionで固定snapshotを開始し、認証・イベント・session・interval・記事・手動判定を1本の接続で読む。PostgreSQLはREPEATABLE READ、SQLiteは明示BEGINを使う。認証接続を保持したまま2本目を待たない。PostgreSQLのexportや運用rebuildは既存のUser行ロックを持つ書き込みtransactionでreplayし、replay自身は接続を追加せずcommit/rollbackも行わない。SQLiteのexportは認証前に明示BEGINし、投影とraw eventsを同じsnapshotで読む。manual state変更後の読み戻しは書き込みをcommitしてから読み取りsnapshotを開始する。
+
 自動の公開メトリクスへ寄与するのは、割当後時間が10秒以上で閲覧条件を満たしたsession。10秒未満の途中観測はraw evidenceとして保存するが、履歴・記事別時間・統計へはまだ投影しない。後続観測で条件に達すると、そのsessionの計上時間全体を投影する。この境界で、履歴に出ない短時間sessionを総時間だけに混ぜず、記事別合計と総時間を一致させる。文字数はsession内推定の最大、記事内session最大、その時刻順増分とする。manual stateは自動メトリクスを増やさない。
 
 端末には読み取りと観測書き込みだけのscopeを付ける。管理操作はWeb session+CSRFで検証する。OAuthはAuthlibでstate/nonce/PKCEを扱い、identity追加の意図をproviderとOAuth stateへ結びつける。未完の追加操作を、その後の通常ログインへ流用しない。同じメールによる結合はしない。
@@ -23,3 +25,5 @@ redirect aliasは公開のarticle_aliasesへ保存する。wiki/titleを一意�
 Androidが開く管理画面はAPIと別originを持てる。匿名の `GET /api/v1/config` は運用者が設定したDashboard originだけを返し、tokenや利用者情報は含めない。Nativeはoriginを検査して `/app` 配下へ遷移する。HTTP loopbackと10.0.2.2への変換はdebug限定とし、API接続先変更時には古い管理画面設定を破棄する。端末承認URLも設定originとgrant IDへ限定する。
 
 Nativeの検索429はRetry-Afterの秒値/HTTP-dateを読取り、不正・欠落時は30秒待つ。wiki別のprocess内期限を単調時計で持ち、再試行・画面再openで待機を短縮しない。待機とHTTPはキャンセルでき、古い入力の結果を採用しない。API接続先変更時は先に端末の資格情報とクラウド同意を解除し、旧tokenを別接続先へ送らない。未送信Outboxは旧owner/deviceに拘束したまま保持し、新たな連携へ付け替えない。
+
+収集controlの適用は端末内で同じowner/deviceに対する要求世代を管理し、新しい要求や設定・連携変更に追い越された応答をqueue変更より前に拒否する。URL解決・batch送信も有効な制御世代と現在の同意を確認する。削除markerを失った古い応答やepoch逆行で、新しいqueueを消してはならない。記事削除時は旧sessionを終了し、cutoffを過ぎた後に制御更新・解決・focus等が揃ってから再開する。再開は5分以内を保証しない。具体的な検証と未実行の境界は [追加修正記録](../releases/control-order-regressions.md) に記す。
