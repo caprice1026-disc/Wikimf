@@ -13,8 +13,8 @@
 - [x] (2026-10-11) Backend投影とDB接続構成を修正。実PG105件、Composeの3パスワードでmigration/health/既存volume再起動が成功。
 - [x] (2026-10-11) Chromeの同意確認、明示同期、削除cutoffを修正。実workerを使う19件が成功。
 - [x] (2026-10-11) 共通trackerの時計逆行を修正。17件とChromium154の実DOM adapter検証が成功。
-- [ ] Androidは修正とJVM12件、debug/test APK、lint(error0/warning9)まで成功。Nativeの端末上回帰テストはremote CIで実行待ち。
-- [ ] 統合チェック、main push、remote CIを確認し、解決Issueをcloseする。
+- [x] (2026-10-11) AndroidはJVM12件、debug/test APK、lint(error0/warning9)、API35 Native8件（skip0/failure0）が成功。
+- [x] (2026-10-11) mainへ3回pushし、52abc0dのremote CI全4job成功を確認。#19〜#27の9件をcompletedでcloseした。
 
 ## Surprises & Discoveries
 
@@ -38,9 +38,13 @@ API35の最初のNative CIは8件中7件が成功し、Readerの削除後に記�
 
 2026-10-11 / Codex: controlの通知だけで記事resolve待機中のcontextを開始しない。確定記事IDでsession.openedを保存し、記事削除で即座に旧sessionを消せるようにするため。offline fallbackは残す。
 
+2026-10-11 / Codex: 最終の記録更新は文書だけをcommitし、[skip ci]で同じNative suiteの再実行を省く。実装コード52abc0dで全4jobとNative8件が成功済みであり、最終commitではコード・依存・workflowを変更しないため。文書の差分とremote反映は確認する。
+
 ## Outcomes & Retrospective
 
-Backend/Chrome/tracker/Composeの修正を `c9361cf` でmainへpushし、CI全4jobが成功した。追加の時計跳躍・削除後の受付テストとAndroid修正を次のcommitへまとめる。実OAuth・HTTPS・物理端末・継続利用は未準備のため#4/#11/#12/#13へ残す。実MV3検証は管理ポリシーで未実施であり、Node worker検証を実Chrome成功とは数えない。
+Backend/Chrome/tracker/Composeをc9361cf、Androidと追加回帰をce0e186、Nativeで発見したresolve/control競合とoffline復帰を52abc0dでmainへ反映した。52abc0df52e838e8325bd1385d6740c3ea09c07dのCI https://github.com/caprice1026-disc/Wikimf/actions/runs/38108995426 は全4job成功。API35の8件はskip0/failure0、JVM12件、実PG105件、tracker17件、extension19件、契約schema、Dashboard unit/build、Composeの3パスワード検証も成功した。#19〜#27は9件ともclosed/completedを確認する。
+
+実OAuth・HTTPS・物理端末・継続利用は未準備のため#4/#11/#12/#13へ残す。実MV3は管理ポリシーで未実施であり、Node workerを実Chrome成功とは数えない。Chromium154の実DOM adapter検証とAndroid Nativeの実行はそれぞれ別の証拠として扱った。既存ST署名APKは旧sourceのため、今回の修正を含むST配布物は署名環境を用意して再buildする。今回作成したAPKはdebug/test検証用である。
 
 ## Context and Orientation
 
@@ -79,3 +83,5 @@ Chromeは記事URL送信前に最新controlとローカル設定を確認する�
 2026-10-11: 実装・実PG/Compose/Chromium/JVM検証と最初のmain push/CI結果を反映。Native回帰はCIのAPI35エミュレーターで実行し、結果を待ってIssueをcloseする。
 
 2026-10-11: Native CIで検出したresolve/controlの競合とoffline session復帰を修正し、実施結果と再実行の範囲を反映した。
+
+2026-10-11: 修正後CI全4jobとNative8件の成功、9件のIssue close、残る実環境受入と配布物の範囲を確定した。

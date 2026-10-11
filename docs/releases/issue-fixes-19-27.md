@@ -38,8 +38,10 @@
 
 JDK17/Gradle8.9/SDK35でJVM12件、debug APK、instrumentation APKのbuildが成功。lintはerror0/warning9（既存の依存更新・backup属性・資格情報commitの警告）。Chromium154の実DOMでAndroid adapterを動かし、非表示中の本文更新通知、非表示時間の不加算、新本文/new session、DOM不変時の同じsessionを確認した。この実DOM検証はAndroid Nativeの実行証拠とは分ける。
 
-Nativeの追加回帰はCIのAPI35エミュレーターで実行する。Readerは実WebView・Native controller・SQLiteを使い、WikipediaとHTTP応答を合成fixtureにする。削除期限の自動再開は実タイマーを短縮したcutoffで確認する。5分の境界はChromeの固定時計検証で確認する。物理端末・実OAuth・実Wikipediaとの縦断は#13へ残す。
+Nativeの追加回帰はCIのAPI35エミュレーターで8件成功（skip0/failure0）。内訳はHTTP遅延/StrictMode/キャンセル1件、Readerの非表示DOM更新/記事削除/解決待ち/オフライン復帰1件、既存privacy6件。Readerは実WebView・Native controller・SQLiteを使い、WikipediaとHTTP応答を合成fixtureにする。削除期限の自動再開は実タイマーを短縮したcutoffで確認した。5分の境界はChromeの固定時計検証で確認した。物理端末・実OAuth・実Wikipediaとの縦断は#13へ残す。
 
 ## リモート確認
 
-最初の修正 `c9361cf6423fbaa940d90d0b2641e46da7d06ec5` はmainへのpushと [CI全4job成功](https://github.com/caprice1026-disc/Wikimf/actions/runs/38107985129) を確認した。[ce0e186の追加Native CI](https://github.com/caprice1026-disc/Wikimf/actions/runs/38108362599) は、Backend/Tracker/Dashboard成功、Androidのbuild/JVM/lint成功、Native8件中1件失敗だった。その修正後の最終CI結果は実行後に追記する。Issueは対応する修正・実行済み証拠がmainへ反映された後にcloseする。
+最初の修正 `c9361cf6423fbaa940d90d0b2641e46da7d06ec5` はmainへのpushと [CI全4job成功](https://github.com/caprice1026-disc/Wikimf/actions/runs/38107985129) を確認した。[ce0e186の追加Native CI](https://github.com/caprice1026-disc/Wikimf/actions/runs/38108362599) は、Backend/Tracker/Dashboard成功、Androidのbuild/JVM/lint成功、Native8件中1件失敗だった。これを修正した最終コードは [52abc0df52e838e8325bd1385d6740c3ea09c07d](https://github.com/caprice1026-disc/Wikimf/commit/52abc0df52e838e8325bd1385d6740c3ea09c07d)。[最終CI全4job](https://github.com/caprice1026-disc/Wikimf/actions/runs/38108995426) とNative8件が成功した。対応する証拠を各Issueへ記録し、#19〜#27の9件をcompletedでcloseした。
+
+残るOPENは#4/#11/#12/#13。実OAuth、HTTPS配備、物理端末、継続利用の未準備・未実施を完了扱いにしない。実MV3はこの環境の管理ポリシーで未実施。既存のST署名APKは旧sourceのため今回の修正を含まない。今回のdebug/test APKを一般配布用とはせず、ST署名環境を用意して最新mainから再buildする。最終の文書更新では実装コードを変えず、成功したCIのコードsourceをこの節に固定する。

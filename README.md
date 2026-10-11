@@ -12,6 +12,8 @@ ST専用鍵で署名したrelease APKを `dist/android-st-0.1.0-87ad275e62dd/wik
 
 Webダッシュボードは、読書履歴を中心にした白・セージ・深緑の画面へ刷新しました。期間別チャート、記事の状態と本文表示率、ライブラリ、設定を統一し、モバイルの下部ナビゲーションとダークテーマに対応しています。[画面と追加検証](docs/releases/issue-fixes-dashboard.md) に、Issue #14〜#18の修正結果をまとめています。
 
+Issue #19〜#27の9件も修正しました。同期と統計の読み取り整合性、Chromeの収集停止・明示同期、時計逆行と削除後の再開、Androidの本文更新・遅延HTTP・正規URL、Composeの特殊文字パスワードを改善し、実PostgreSQLとAPI35 Native回帰を含むCI全4jobが成功しています。[修正と検証範囲](docs/releases/issue-fixes-19-27.md) を参照してください。上記の旧ST署名APKには今回の修正が含まれないため、ST配布時は最新mainから再buildします。
+
 ![Webダッシュボード](docs/releases/evidence/dashboard-redesign-desktop.png)
 
 ## 構成と仕様
