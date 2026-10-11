@@ -69,6 +69,10 @@ class MainActivity : ComponentActivity() {
                 external = { external = it }, message = { message = it }, changed = { tick++ })
         }
         reader = controller
+        DisposableEffect(controller) {
+            val unsubscribe = settings.observeControl { controller.activeChanged(); tick++ }
+            onDispose { unsubscribe() }
+        }
         LaunchedEffect(tab, search, external, actionDialog, menu, message, foreground, focused, tick) { controller.activeChanged() }
         BackHandler(search || tab == "account" || controller.canBack) {
             when { search -> search = false; tab == "account" -> tab = "reader"; controller.canBack -> controller.webView?.goBack() }
@@ -254,7 +258,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private class ReaderController(
+internal class ReaderController(
     private val activity: MainActivity, private val settings: Settings, private val store: LocalStore,
     private val scope: CoroutineScope, private val active: () -> Boolean,
     private val external: (String) -> Unit, private val message: (String) -> Unit, private val changed: () -> Unit
@@ -274,6 +278,8 @@ private class ReaderController(
     private var hostActive = false
     private var sessionDevice: LinkedDevice? = null
     private var sessionEpoch = 0
+    private var sessionStartedAt = 0L
+    private var deletionResumeJob: Job? = null
     private var pageReady = false
     private var domEligible = false
     private var domPageId = 0L
@@ -303,11 +309,17 @@ private class ReaderController(
                 val payload = msg.data ?: return@addWebMessageListener
                 if (!SecurityPolicy.acceptsBridge(origin.toString(), mainFrame, payload.toByteArray().size, view.url ?: "")) return@addWebMessageListener
                 val event = runCatching { JSONObject(payload) }.getOrNull() ?: return@addWebMessageListener
-                if (event.optString("kind") == "document_changed") { if (active()) { stop("document_changed"); start() }; return@addWebMessageListener }
+                if (event.optString("kind") == "document_changed") {
+                    stop("document_changed")
+                    if (active()) start()
+                    return@addWebMessageListener
+                }
                 val device = sessionDevice ?: return@addWebMessageListener
                 if (!contextStarted || !guard.accepts(event, System.currentTimeMillis())) return@addWebMessageListener
                 event.put("source", "android_reader").put("device_id", device.deviceId).put("recording_epoch", sessionEpoch)
                 val currentArticle = article
+                val cutoff = this@ReaderController.settings.deletionCutoff(currentArticle?.optString("article_id"))
+                if (cutoff != null && java.time.Instant.parse(event.getString("session_started_at")).toEpochMilli() <= cutoff) return@addWebMessageListener
                 if (currentArticle != null) event.put("article_id", currentArticle.getString("article_id")).put("wiki", currentArticle.getString("wiki")).put("page_id", currentArticle.getLong("page_id"))
                 val accepted = store.enqueue(device, event, if (currentArticle == null) this@ReaderController.url.substringBefore('#') else null)
                 if (!accepted) { this@ReaderController.settings.paused = true; status = "未送信キュー上限に達したため記録を停止しました"; activeChanged(false) }
@@ -378,6 +390,14 @@ private class ReaderController(
     fun activeChanged(force: Boolean? = null) {
         if (!settings.cloudConsent || !settings.serverEnabled || settings.device() == null) resolveJob?.cancel()
         if (contextStarted && (settings.device()?.deviceId != sessionDevice?.deviceId || settings.epoch != sessionEpoch)) { stop("logout"); stateLabel = "" }
+        val cutoff = settings.deletionCutoff(articleId)
+        if (contextStarted && cutoff != null && sessionStartedAt <= cutoff) { stop("pause"); stateLabel = "" }
+        if (cutoff != null && System.currentTimeMillis() <= cutoff) {
+            deletionResumeJob?.cancel()
+            deletionResumeJob = scope.launch { delay(cutoff - System.currentTimeMillis() + 1); activeChanged() }
+            status = "削除済み履歴の再送を防ぐため、記録の再開を待っています"
+            return
+        }
         val enabled = (force ?: active()) && settings.cloudConsent && settings.serverEnabled && !settings.paused && settings.device() != null
         if (!enabled && hostActive) { hostActive = false; webView?.evaluateJavascript("window.WKMF_NATIVE?.setActive(false)", null) }
         else if (enabled && contextStarted && !hostActive) { hostActive = true; webView?.requestFocus(); webView?.evaluateJavascript("window.WKMF_NATIVE?.setActive(true)", null) }
@@ -387,8 +407,11 @@ private class ReaderController(
     private fun start(fallbackPageId: Long = domPageId) {
         if (contextStarted || !pageReady || !bridgeEnabled || !active() || !settings.cloudConsent || !settings.serverEnabled || settings.paused || !UrlPolicy.measurable(url)) return
         val device = settings.device() ?: return
+        val cutoff = settings.deletionCutoff(articleId)
+        if (cutoff != null && System.currentTimeMillis() <= cutoff) { activeChanged(); return }
         sessionDevice = device
         sessionEpoch = settings.epoch
+        sessionStartedAt = System.currentTimeMillis()
         val session = guard.reset()
         val descriptor = article ?: JSONObject().put("article_id", JSONObject.NULL).put("wiki", UrlPolicy.wiki(url)).put("page_id", fallbackPageId)
         val context = JSONObject().put("article", descriptor).put("deviceId", device.deviceId).put("source", "android_reader").put("epoch", settings.epoch).put("sessionId", session).put("active", true)
@@ -400,5 +423,5 @@ private class ReaderController(
         status = ""
     }
     fun stop(reason: String) { webView?.evaluateJavascript("window.WKMF_NATIVE?.stop(${JSONObject.quote(reason)})", null); contextStarted = false; hostActive = false }
-    fun destroy() { stop("pause"); resolveJob?.cancel(); webView?.destroy(); webView = null }
+    fun destroy() { stop("pause"); resolveJob?.cancel(); deletionResumeJob?.cancel(); webView?.destroy(); webView = null }
 }

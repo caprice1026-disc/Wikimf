@@ -91,6 +91,12 @@ test('sync then unlink works while automatic delivery is OFF', async t => {
   const result = await h.message({ type: 'logout', discard: false });
   assert.equal(result.linked, false); assert.equal((await h.queue.read()).rows.length, 0);
 });
+test('explicit sync waits for a concurrently skipped automatic attempt and still sends', async t => {
+  const h = await worker(t, { recording: false }); await h.queue.enqueue(h.auth, opened(h));
+  h.listeners.alarm({ name: 'wikimf-sync' });
+  assert.equal((await h.message({ type: 'sync' })).queued, 0);
+  assert.equal(h.requests.filter(item => item.path.endsWith('/reading-events/batch')).length, 1);
+});
 test('explicit sync still respects remote collection OFF and device revocation', async t => {
   const h = await worker(t, { recording: false, enabled: false }); await h.queue.enqueue(h.auth, opened(h));
   assert.equal((await h.message({ type: 'sync' })).queued, 1);

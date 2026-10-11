@@ -24,14 +24,19 @@ import kotlin.coroutines.resumeWithException
 
 class ApiFailure(val code: Int, val errorCode: String, val retryAfterMs: Long = 0) : IOException(errorCode)
 
-class Api(private val settings: Settings) {
-    private val http = OkHttpClient.Builder().callTimeout(20, TimeUnit.SECONDS).followRedirects(false).build()
-    private suspend fun execute(request: Request): Response = suspendCancellableCoroutine { continuation ->
+class Api(private val settings: Settings, private val http: OkHttpClient = OkHttpClient.Builder().callTimeout(20, TimeUnit.SECONDS).followRedirects(false).build()) {
+    private suspend fun <T> execute(request: Request, consume: (Response) -> T): T = suspendCancellableCoroutine { continuation ->
         val call = http.newCall(request)
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, error: IOException) { if (!continuation.isCancelled) continuation.resumeWithException(error) }
-            override fun onResponse(call: Call, response: Response) { continuation.resume(response) { _, value, _ -> value.close() } }
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    // Consume and parse the body on OkHttp's worker, including delayed/chunked reads.
+                    val result = response.use(consume)
+                    if (continuation.isActive) continuation.resume(result)
+                } catch (error: Exception) { if (continuation.isActive) continuation.resumeWithException(error) }
+            }
         })
     }
     suspend fun request(path: String, body: JSONObject? = null, device: LinkedDevice? = settings.device()): JSONObject {
@@ -42,7 +47,7 @@ class Api(private val settings: Settings) {
         val builder = Request.Builder().url(apiUrl + path).header("Accept", "application/json")
         if (device != null) builder.header("Authorization", "Bearer ${device.token}")
         if (body != null) builder.post(body.toString().toRequestBody("application/json".toMediaType()))
-        return execute(builder.build()).use { response ->
+        return execute(builder.build()) { response ->
             val raw = response.body?.string() ?: "{}"
             val json = runCatching { JSONObject(raw) }.getOrElse { throw ApiFailure(response.code, "invalid_server_response") }
             if (!response.isSuccessful) throw ApiFailure(response.code, json.optJSONObject("error")?.optString("code") ?: "http_${response.code}", (response.header("Retry-After")?.toLongOrNull() ?: 0) * 1000)
@@ -64,11 +69,11 @@ class Api(private val settings: Settings) {
         store.expire()
         val control = request("/me/recording-control", device = device)
         if (control.getString("user_id") != device.userId || control.getString("device_id") != device.deviceId) throw ApiFailure(403, "owner_mismatch")
-        settings.epoch = control.getInt("recording_epoch")
-        settings.serverEnabled = control.getBoolean("collection_enabled")
-        store.discardEpoch(device.userId, settings.epoch)
+        if (settings.device() != device) throw ApiFailure(401, "device_binding_changed")
+        store.discardEpoch(device.userId, control.getInt("recording_epoch"))
         val markers = control.optJSONArray("deletion_markers") ?: JSONArray()
         store.discardDeleted(device.userId, markers)
+        settings.saveControl(control.getInt("recording_epoch"), control.getBoolean("collection_enabled"), markers)
         return markers
     }
     suspend fun resolveArticle(store: LocalStore, url: String, device: LinkedDevice): JSONObject {
@@ -84,7 +89,7 @@ class Api(private val settings: Settings) {
         currentCoroutineContext().ensureActive()
         val host = if (wiki == "jawiki") "ja" else "en"
         val url = "https://$host.wikipedia.org/w/rest.php/v1/search/${if (full) "page" else "title"}?q=${URLEncoder.encode(query.trim(), "UTF-8")}&limit=${if (full) 20 else 10}"
-        return execute(Request.Builder().url(url).header("User-Agent", "wikimf/0.1.0 (Android reader)").build()).use { response ->
+        return execute(Request.Builder().url(url).header("User-Agent", "wikimf/0.1.0 (Android reader)").build()) { response ->
             if (response.code == 429) {
                 val wait = RetryAfter.delayMillis(response.header("Retry-After"), System.currentTimeMillis())
                 searchCooldown.block(wiki, SystemClock.elapsedRealtime(), wait)

@@ -88,3 +88,25 @@ jobs:
             -storepass android -keypass android -alias androiddebugkey \
             -dname "CN=Android Debug,O=Android,C=US" -validity 10950 -keyalg RSA -keysize 2048
       - run: gradle testDebugUnitTest assembleDebug lintDebug --no-daemon
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Native HTTP, Reader lifecycle, and privacy regressions
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          working-directory: apps/android
+          disable-animations: true
+          script: gradle connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.wikimf.reader.ApiTransportRegressionTest,org.wikimf.reader.ReaderLifecycleRegressionTest,org.wikimf.reader.PrivacyRegressionTest --no-daemon
+      - name: Upload Android regression results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-regression-results
+          path: |
+            apps/android/app/build/reports/androidTests
+            apps/android/app/build/outputs/androidTest-results

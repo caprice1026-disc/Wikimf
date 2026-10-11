@@ -2,12 +2,14 @@ package org.wikimf.reader
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.SharedPreferences
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import org.json.JSONObject
+import org.json.JSONArray
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -49,6 +51,17 @@ class Settings(context: Context) {
     var serverEnabled: Boolean
         get() = prefs.getBoolean("server_enabled", true)
         set(value) { prefs.edit().putBoolean("server_enabled", value).apply() }
+    fun deletionCutoff(articleId: String?): Long? = HistoryDeletion.cutoff(JSONArray(prefs.getString("deletion_markers", "[]")), articleId)
+    fun saveControl(epoch: Int, enabled: Boolean, markers: JSONArray) {
+        prefs.edit().putInt("epoch", epoch).putBoolean("server_enabled", enabled).putString("deletion_markers", markers.toString()).apply()
+    }
+    fun observeControl(changed: () -> Unit): () -> Unit {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key in setOf("epoch", "server_enabled", "deletion_markers")) changed()
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        return { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
     var language: String
         get() = prefs.getString("language", if (java.util.Locale.getDefault().language == "ja") "jawiki" else "enwiki")!!
         set(value) { prefs.edit().putString("language", value).apply() }
@@ -74,9 +87,19 @@ class Settings(context: Context) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
         val packed = cipher.iv + cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8))
         secure.edit().putString("device", Base64.encodeToString(packed, Base64.NO_WRAP)).commit()
+        prefs.edit().remove("deletion_markers").apply()
         cloudConsent = false
     }
-    fun unlink() { secure.edit().clear().commit(); cloudConsent = false; status = "未連携" }
+    fun unlink() { secure.edit().clear().commit(); cloudConsent = false; prefs.edit().remove("deletion_markers").apply(); status = "未連携" }
+}
+
+object HistoryDeletion {
+    fun cutoff(markers: JSONArray, articleId: String?): Long? {
+        if (articleId == null) return null
+        return (0 until markers.length()).map { markers.getJSONObject(it) }
+            .filter { it.optString("article_id") == articleId }
+            .map { java.time.Instant.parse(it.getString("deleted_before")).toEpochMilli() }.maxOrNull()
+    }
 }
 
 data class HistoryEntry(val wiki: String, val key: String, val title: String, val pageId: Long?, val url: String, val description: String? = null)

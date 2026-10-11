@@ -217,6 +217,11 @@ export class DOMTracker {
   tick() {
     if (!this.session) return;
     const win = this.doc.defaultView, mono = performance.now(), now = Date.now();
+    const delta = mono - this.session.lastMono, wallDelta = now - this.session.lastWall;
+    if (wallDelta < 0 || delta < 0 || Math.abs(wallDelta - delta) > 2000) {
+      this.session.tick({ now, mono, active: false });
+      this.stop('clock_changed'); this.host.restart?.(); return;
+    }
     this.flushBeforeIntervalLimit(now);
     const active = this.enabled && this.doc.visibilityState === 'visible' && this.doc.hasFocus() && this.host.active();
     if (active && !this.wasActive && now >= this.session.lastWall) {

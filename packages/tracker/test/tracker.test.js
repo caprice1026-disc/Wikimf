@@ -77,6 +77,17 @@ test('DOM host closes at its last valid sample and requests a fresh session afte
     assert.ok(validateObservation(fresh.event('reading.observed')));
   });
 });
+test('a close before the next tick and a large clock jump both retain valid sampled spans', () => {
+  const reading = session(), events = [reading.event('session.opened')];
+  reading.tick({ now: time + 1000, mono: 1000, active: true });
+  events.push(reading.event('session.closed', time + 999, 'pause'));
+  assertIntervals(events); assert.ok(events.every(validateObservation));
+  suspendedTracker(({ tracker, clock, events }) => {
+    recordThreeSeconds(tracker); clock.mono = 4000; clock.wall = 120000; tracker.tick();
+    assertIntervals(events); assert.equal(events.at(-1).type, 'session.closed');
+    assert.equal(events.at(-1).progress.active_ms_total, 3000); assert.ok(events.every(validateObservation));
+  });
+});
 test('URL boundary excludes credentials, lookalikes, old revisions, and fragments do not change article identity', () => {
   assert.deepEqual(articleLocation('https://ja.wikipedia.org/wiki/A_B#Section'), { wiki: 'jawiki', title: 'A B' });
   assert.deepEqual(articleLocation('https://en.wikipedia.org/w/index.php?title=Earth&action=view'), { wiki: 'enwiki', title: 'Earth' });

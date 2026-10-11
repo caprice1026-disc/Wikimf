@@ -6,6 +6,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BoundaryTest {
+    @Test fun currentArticleUrlsMatchSharedContract() {
+        for (host in listOf("ja", "en")) {
+            for (path in listOf("/w/index.php?title=Earth", "/w/index.php?title=Earth&action=view", "/wiki/Earth?action=view", "/w/index.php?curid=9228&action=view")) {
+                assertTrue(path, UrlPolicy.measurable("https://$host.wikipedia.org$path"))
+            }
+            for (path in listOf("/w/index.php?title=Earth&action=edit", "/wiki/Earth?oldid=1", "/wiki/Earth?diff=1", "/wiki/Earth?title=Mars", "/wiki/Earth?curid=9228", "/w/index.php?title=Earth&curid=9228", "/w/index.php?title=Earth&title=Mars", "/w/index.php?curid=1&curid=2", "/w/index.php?curid=2147483648", "/w/index.php?curid=01", "/wiki/Earth?redirect=no", "/wiki/Earth?action=view&action=edit")) {
+                assertFalse(path, UrlPolicy.measurable("https://$host.wikipedia.org$path"))
+            }
+        }
+    }
+    @Test fun deletionCutoffIsArticleSpecificAndSurvivesPastItsDeadline() {
+        val markers = JSONArray("[{\"article_id\":\"A\",\"deleted_before\":\"2026-10-04T00:05:00Z\"}]")
+        val cutoff = java.time.Instant.parse("2026-10-04T00:05:00Z").toEpochMilli()
+        assertEquals(cutoff, HistoryDeletion.cutoff(markers, "A"))
+        assertNull(HistoryDeletion.cutoff(markers, "B")); assertNull(HistoryDeletion.cutoff(markers, null))
+        assertNull(HistoryDeletion.cutoff(JSONArray(), "A"))
+    }
     @Test fun strictNavigationAndArticleEligibility() {
         assertEquals(UrlPolicy.Destination.READER, UrlPolicy.classify("https://ja.wikipedia.org/wiki/東京"))
         assertEquals(UrlPolicy.Destination.READER, UrlPolicy.classify("https://en.wikipedia.org:443/wiki/Example"))

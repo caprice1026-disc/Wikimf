@@ -6,7 +6,7 @@ from sqlalchemy import event
 from sqlalchemy.engine import make_url
 
 from conftest import observation, send, web_headers
-from wikimf.db import configured_database_url, database, now
+from wikimf.db import DeletionMarker, configured_database_url, database, now
 
 
 @pytest.mark.parametrize("mutation", ["new", "append", "article_delete", "all_delete", "manual"])
@@ -72,3 +72,17 @@ def test_database_components_preserve_raw_password(monkeypatch, password):
         assert password not in str(engine.url)
     finally:
         engine.dispose()
+
+
+def test_article_deletion_rejects_old_session_and_accepts_post_cutoff_session(env):
+    app, client, ids = env
+    cutoff = now()-timedelta(seconds=30)
+    with app.state.sessions() as db:
+        db.add(DeletionMarker(user_id=ids["user_id"], article_id=ids["article_id"], deleted_before=cutoff))
+        db.commit()
+    old = observation(ids, start=cutoff-timedelta(seconds=5), seconds=10)
+    fresh = observation(ids, start=cutoff+timedelta(milliseconds=1), seconds=10)
+    results = send(client, ids, old, fresh).json()["results"]
+    assert (results[0]["status"], results[0]["code"], results[0]["retryable"]) == ("rejected", "history_deleted", False)
+    assert results[1]["status"] == "accepted"
+    assert client.get("/api/v1/me/stats").json()["activity"]["active_ms"] == 10000

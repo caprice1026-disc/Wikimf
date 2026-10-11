@@ -20,16 +20,24 @@ object UrlPolicy {
     fun measurable(raw: String): Boolean = runCatching {
         if (classify(raw) != Destination.READER) return false
         val uri = URI(raw)
-        val query = (uri.rawQuery ?: "").split('&').associate {
+        val pairs = (uri.rawQuery ?: "").split('&').filter { it.isNotEmpty() }.map {
             val parts = it.split('=', limit = 2)
             URLDecoder.decode(parts[0], "UTF-8") to URLDecoder.decode(parts.getOrElse(1) { "" }, "UTF-8")
         }
-        if (query.keys.any { it in setOf("oldid", "diff", "action", "veaction", "search") }) return false
+        if (pairs.map { it.first }.distinct().size != pairs.size) return false
+        val query = pairs.toMap()
+        if (query.keys.any { it in setOf("oldid", "diff", "veaction", "search", "redirect", "curtimestamp") }) return false
+        if (query.containsKey("action") && query["action"] != "view") return false
+        if (query.containsKey("curid")) {
+            val id = query["curid"] ?: return false
+            return uri.path == "/w/index.php" && !query.containsKey("title") &&
+                Regex("[1-9][0-9]*").matches(id) && id.toLongOrNull()?.let { it <= Int.MAX_VALUE } == true
+        }
+        if (uri.path.startsWith("/wiki/") && query.containsKey("title")) return false
         val title = if (uri.path.startsWith("/wiki/")) uri.path.removePrefix("/wiki/") else query["title"] ?: ""
-        val currentId = uri.path == "/w/index.php" && query["curid"]?.toLongOrNull()?.let { it > 0 } == true
         val namespace = title.substringBefore(':').lowercase()
         val excluded = setOf("special", "category", "talk", "user", "user_talk", "wikipedia", "wikipedia_talk", "file", "image", "template", "help", "portal", "draft", "module", "特別", "カテゴリ", "カテゴリー", "ノート", "利用者", "利用者‐会話", "ファイル", "画像", "プロジェクト")
-        currentId || (uri.path.startsWith("/wiki/") && !(title.contains(':') && namespace in excluded) && title !in setOf("Main_Page", "メインページ", ""))
+        (uri.path.startsWith("/wiki/") || uri.path == "/w/index.php") && !(title.contains(':') && namespace in excluded) && title !in setOf("Main_Page", "メインページ", "")
     }.getOrDefault(false)
     fun articleUrl(wiki: String, key: String): String = "https://${if (wiki == "jawiki") "ja" else "en"}.wikipedia.org/wiki/" + URLEncoder.encode(key.replace(' ', '_'), "UTF-8").replace("+", "%20")
     fun initialUrl(current: String, wiki: String): String = current.takeIf { classify(it) == Destination.READER }
