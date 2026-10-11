@@ -399,9 +399,26 @@ internal class ReaderController(
             return
         }
         val enabled = (force ?: active()) && settings.cloudConsent && settings.serverEnabled && !settings.paused && settings.device() != null
+        if (enabled && contextStarted && articleId == null && pageReady && domEligible && resolveJob?.isActive != true) {
+            // Recover an offline fallback before continuing an unidentified session.
+            val device = settings.device() ?: return
+            val generation = pageGeneration
+            val frameUrl = url
+            resolveJob = scope.launch {
+                val resolved = try { Api(settings).resolveArticle(store, frameUrl, device) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { return@launch }
+                if (generation != pageGeneration || settings.device() != device) return@launch
+                stop("document_changed")
+                article = resolved; articleId = resolved.optString("article_id")
+                refreshState()
+                if (resolved.optBoolean("trackable")) start(domPageId)
+                else status = "このページは読書計測の対象外です"
+            }
+        }
         if (!enabled && hostActive) { hostActive = false; webView?.evaluateJavascript("window.WKMF_NATIVE?.setActive(false)", null) }
         else if (enabled && contextStarted && !hostActive) { hostActive = true; webView?.requestFocus(); webView?.evaluateJavascript("window.WKMF_NATIVE?.setActive(true)", null) }
-        else if (enabled && pageReady && domEligible && article?.optBoolean("trackable") != false) start(domPageId)
+        else if (enabled && pageReady && domEligible && resolveJob?.isActive != true && article?.optBoolean("trackable") != false) start(domPageId)
         if (bridgeEnabled && !enabled) status = if (settings.paused) "記録一時停止中" else if (!settings.cloudConsent || settings.device() == null) "クラウド記録はAccountで連携・同意後に開始します" else if (!settings.serverEnabled) "クラウド収集はDashboardで有効にしてください" else ""
     }
     private fun start(fallbackPageId: Long = domPageId) {

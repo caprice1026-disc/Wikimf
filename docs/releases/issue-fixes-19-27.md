@@ -28,6 +28,8 @@
 
 #23 Android: 削除markerをNative設定へ保持し、Readerへ変更通知する。旧sessionは停止し、期限中の新規計測を保留し、期限後に新IDで自動再開する。旧epoch/削除済みOutboxの破棄は維持し、連携解除・owner切替でmarkerを消す。旧sessionの遅延イベントもNative側で保存しない。
 
+最初のAPI35 Native CIでは8件中7件が成功し、control通知が記事resolve待機中のReaderを起動して未解決のsession.openedを残すケースを追加検出した。通知からの開始はresolve完了まで待つよう修正した。offline fallbackも維持し、通信回復時に未解決の実行中sessionを解決・終了して、既知の削除cutoff以降に新sessionへ切り替える回帰を追加した。
+
 #25: 非表示中のdocument_changedでもNative contextを無効化する。Account/Search/背景化から戻る、または一時停止を解除すると、新しい本文とsessionで開始する。DOMが変わらなければ同じsessionを維持する。
 
 #26: HTTP本文を読み切りparseするまでOkHttp callbackのworkerで処理する。Mainへ生Responseを返さない。Response.useでcloseし、coroutine cancelではCall.cancelで本文読み取りも中断する。遅延本文・chunked本文・MainのStrictMode・検索キャンセルを端末上回帰テストへ追加した。
@@ -40,4 +42,4 @@ Nativeの追加回帰はCIのAPI35エミュレーターで実行する。Reader�
 
 ## リモート確認
 
-最初の修正 `c9361cf6423fbaa940d90d0b2641e46da7d06ec5` はmainへのpushと [CI全4job成功](https://github.com/caprice1026-disc/Wikimf/actions/runs/38107985129) を確認した。Androidと追加回帰を含む最終CIの結果は、実行後にこの節へ追記する。Issueは対応する修正・実行済み証拠がmainへ反映された後にcloseする。
+最初の修正 `c9361cf6423fbaa940d90d0b2641e46da7d06ec5` はmainへのpushと [CI全4job成功](https://github.com/caprice1026-disc/Wikimf/actions/runs/38107985129) を確認した。[ce0e186の追加Native CI](https://github.com/caprice1026-disc/Wikimf/actions/runs/38108362599) は、Backend/Tracker/Dashboard成功、Androidのbuild/JVM/lint成功、Native8件中1件失敗だった。その修正後の最終CI結果は実行後に追記する。Issueは対応する修正・実行済み証拠がmainへ反映された後にcloseする。

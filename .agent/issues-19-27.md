@@ -22,6 +22,10 @@
 
 ローカルJDK21にはjlinkがないため、アプリ専用領域へ固定JDK17/Gradle8.9/SDK35を導入した。Javaはproxyと公開CAを指定して依存を取得した。npm cacheとBuildxの作業領域もworkspaceへ配置し、既存設定を変更しなかった。Chromium154は管理ポリシーで拡張の読み込みを禁止するため、実MV3検証は未実施。拡張を使わない実DOM adapter検証は成功した。
 
+API35の最初のNative CIは8件中7件が成功し、Readerの削除後に記事ID未解決の古いsession.openedが残る検証で失敗した。control応答の設定通知が記事resolve待機中のReaderをfallbackで起動する競合だった。activeChangedからの開始はresolveJob完了まで待ち、失敗時のoffline fallbackは従来どおりresolve coroutineの終了経路で開始する。実fixtureの初回読込もclient設置後に行うようテストを固定した。
+
+未解決のoffline sessionも、通信回復のcontrol通知でarticleを再解決し、旧sessionを終了して既知のcutoff以降へ移す。Native回帰は初回session.openedの確定記事IDとoffline→削除通知→復帰も検査する。
+
 ## Decision Log
 
 2026-10-11 / Codex: 実OAuth・物理端末を要するIssueはcloseしない。理由はユーザーが環境未準備と回答したため。具体的な不具合9件は独立した回帰証拠を伴って解決する。
@@ -31,6 +35,8 @@
 2026-10-11 / Codex: 削除markerをowner切替で消し、同じcontrol応答のepoch/収集状態/markerをまとめてNative設定へ反映する。Readerは通知で旧sessionを止め、cutoff期限後のタイマーで再開する。非表示中の本文変更でもcontextを無効化する。理由は既存の削除防止・非表示時間の不加算を維持するため。
 
 2026-10-11 / Codex: 時計逆行は大きさにかかわらず終了し、最後の有効サンプルまで保存する。大きな時計跳躍をintervalの長時間停止処理より先に検知する。追加回帰で長時間停止処理がcloseを失うことを発見したため。HTTP本文消費とparseはOkHttp workerで行い、cancel時のCall.cancelとResponse.useを維持する。
+
+2026-10-11 / Codex: controlの通知だけで記事resolve待機中のcontextを開始しない。確定記事IDでsession.openedを保存し、記事削除で即座に旧sessionを消せるようにするため。offline fallbackは残す。
 
 ## Outcomes & Retrospective
 
@@ -71,3 +77,5 @@ Chromeは記事URL送信前に最新controlとローカル設定を確認する�
 2026-10-11: 初版。調査とユーザー回答に基づいて対象と検証方法を確定した。
 
 2026-10-11: 実装・実PG/Compose/Chromium/JVM検証と最初のmain push/CI結果を反映。Native回帰はCIのAPI35エミュレーターで実行し、結果を待ってIssueをcloseする。
+
+2026-10-11: Native CIで検出したresolve/controlの競合とoffline session復帰を修正し、実施結果と再実行の範囲を反映した。

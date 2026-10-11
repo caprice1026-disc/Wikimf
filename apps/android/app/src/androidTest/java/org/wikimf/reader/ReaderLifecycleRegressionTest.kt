@@ -22,6 +22,7 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicBoolean
 
 @RunWith(AndroidJUnit4::class)
 class ReaderLifecycleRegressionTest {
@@ -33,6 +34,7 @@ class ReaderLifecycleRegressionTest {
         val device = LinkedDevice(UUID.randomUUID().toString(), UUID.randomUUID().toString(), "synthetic-no-authority-token", "Fixture")
         val articleId = UUID.randomUUID().toString()
         val markers = AtomicReference(JSONArray())
+        val resolveOffline = AtomicBoolean(false)
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
         var active = true
@@ -42,6 +44,7 @@ class ReaderLifecycleRegressionTest {
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
+                    if (request.path!!.endsWith("/articles/resolve") && resolveOffline.get()) return MockResponse().setResponseCode(503).setBody("{}")
                     val json = when {
                         request.path!!.endsWith("/recording-control") -> JSONObject().put("user_id", device.userId).put("device_id", device.deviceId).put("recording_epoch", 1).put("collection_enabled", true).put("deletion_markers", markers.get())
                         request.path!!.endsWith("/articles/resolve") -> JSONObject().put("article_id", articleId).put("wiki", "enwiki").put("page_id", 9228).put("namespace", 0).put("trackable", true)
@@ -66,6 +69,8 @@ class ReaderLifecycleRegressionTest {
                         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) = original.onPageStarted(view, url, favicon)
                         override fun onPageFinished(view: WebView, url: String?) = original.onPageFinished(view, url)
                     }
+                    // Ensure the initial request also uses the installed fixture client.
+                    view.stopLoading(); view.loadUrl(controller!!.url)
                     activity.setContentView(view); view.requestFocus()
                     unsubscribe = settings.observeControl { controller!!.activeChanged() }
                 }
@@ -79,7 +84,16 @@ class ReaderLifecycleRegressionTest {
                     repeat(100) { val current = session(); if (current != null && current != previous) return current; Thread.sleep(100) }
                     error("Native session did not start/restart")
                 }
+                fun awaitOpened(sessionId: String): JSONObject {
+                    repeat(100) {
+                        val found = store.rows(device).map { JSONObject(it.payload) }.firstOrNull { it.optString("session_id") == sessionId && it.optString("type") == "session.opened" }
+                        if (found != null) return found
+                        Thread.sleep(50)
+                    }
+                    error("Native session.opened was not persisted")
+                }
                 var current = awaitSession()
+                assertEquals("Control notifications must wait for article resolution before opening a session", articleId, awaitOpened(current).getString("article_id"))
                 assertTrue("index.php current article must be remembered", store.history(device.userId, "viewed", "enwiki").isNotEmpty())
                 for (mode in listOf("account", "search", "pause", "background")) {
                     instrumentation.runOnMainSync { if (mode == "pause") settings.paused = true else active = false; controller!!.activeChanged() }
@@ -103,9 +117,22 @@ class ReaderLifecycleRegressionTest {
                 assertFalse("Old sessions must be removed from Outbox", store.rows(device).any { JSONObject(it.payload).optString("session_id") == current })
                 Thread.sleep(2500)
                 val fresh = awaitSession(current)
-                val opened = store.rows(device).map { JSONObject(it.payload) }.first { it.optString("session_id") == fresh }
+                val opened = awaitOpened(fresh)
                 assertTrue(java.time.Instant.parse(opened.getString("session_started_at")).toEpochMilli() > cutoff)
                 assertTrue("Only post-cutoff sessions may remain", store.rows(device).all { java.time.Instant.parse(JSONObject(it.payload).getString("session_started_at")).toEpochMilli() > cutoff })
+                resolveOffline.set(true)
+                instrumentation.runOnMainSync { controller!!.webView!!.reload() }
+                val offlineSession = awaitSession(fresh)
+                awaitOpened(offlineSession)
+                assertNull("Failed resolution retains offline recording", controller!!.articleId)
+                val recoveryCutoff = System.currentTimeMillis() + 2000
+                markers.set(JSONArray().put(JSONObject().put("article_id", articleId).put("deleted_before", java.time.Instant.ofEpochMilli(recoveryCutoff).toString())))
+                resolveOffline.set(false)
+                withContext(Dispatchers.Main) { Api(settings).recordingControl(store, device) }
+                val recovered = awaitSession(offlineSession)
+                val recoveredEvent = awaitOpened(recovered)
+                assertEquals(articleId, recoveredEvent.getString("article_id"))
+                assertTrue("Offline recovery must retire the old session and wait for the known deletion cutoff", java.time.Instant.parse(recoveredEvent.getString("session_started_at")).toEpochMilli() > recoveryCutoff)
             } finally {
                 instrumentation.runOnMainSync { unsubscribe?.invoke(); controller?.destroy(); activity.finish() }
                 scope.cancel(); store.discard(device.userId); store.close(); settings.unlink(); settings.apiUrl = originalApi
