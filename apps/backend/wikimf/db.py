@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -191,3 +192,16 @@ def database(url=None):
         def enforce_foreign_keys(connection, _):
             connection.execute("PRAGMA foreign_keys=ON")
     return engine, sessionmaker(engine, expire_on_commit=False)
+
+
+@contextmanager
+def read_snapshot(factory):
+    """Start one read transaction before authentication can issue any SELECTs."""
+    with factory() as db:
+        dialect = db.get_bind().dialect.name
+        if dialect == "postgresql":
+            db.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+        elif dialect == "sqlite":
+            # sqlite3's legacy transaction mode does not BEGIN for SELECT.
+            db.connection().exec_driver_sql("BEGIN")
+        yield db

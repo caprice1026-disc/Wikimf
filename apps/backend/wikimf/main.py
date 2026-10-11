@@ -23,7 +23,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .articles import APIError, MediaWikiClient, article_json, resolve
 from .auth import COOKIE, RECENT_AUTH, authenticate, configure_oauth, digest, hash_user_code, identify, issue_web_session, require_recent_auth, token, verify_user_code
 from .contracts import BatchGet, DeleteAccount, EventBatch, PairApproval, PairExchange, PairInput, PrivacyInput, ResolveInput, StateInput
-from .db import Article, Base, DeletionMarker, Device, DeviceLink, Identity, ManualState, ReadingEvent, ReadingSession, User, WebSession, database, now, utc
+from .db import Article, Base, DeletionMarker, Device, DeviceLink, Identity, ManualState, ReadingEvent, ReadingSession, User, WebSession, database, now, read_snapshot, utc
 from .ingest import accept_batch, lock_user
 from .projection import achievements, replay, stamp, stats
 
@@ -63,6 +63,15 @@ def create_app(database_url=None, mediawiki=None):
     def db_session():
         with factory() as session:
             yield session
+
+    def snapshot_session():
+        with read_snapshot(factory) as session:
+            yield session
+
+    def export_session():
+        # SQLite has no row locks; keep raw events and replay in one snapshot.
+        # PostgreSQL keeps its READ COMMITTED transaction and user row lock.
+        yield from (snapshot_session() if engine.dialect.name == "sqlite" else db_session())
 
     @app.middleware("http")
     async def boundaries(request, call_next):
@@ -448,7 +457,7 @@ def create_app(database_url=None, mediawiki=None):
         return {"items":selected,"next_cursor":next_cursor}
 
     @app.get(PREFIX+"/me/articles")
-    def library(request: Request,wiki:str|None=None,state:str|None=None,query:str|None=Query(None,max_length=200),sort:str="last_read",cursor:str|None=None,limit:int=Query(50,ge=1,le=100),db=Depends(db_session)):
+    def library(request: Request,wiki:str|None=None,state:str|None=None,query:str|None=Query(None,max_length=200),sort:str="last_read",cursor:str|None=None,limit:int=Query(50,ge=1,le=100),db=Depends(snapshot_session)):
         user,_,_ = authenticate(request,db)
         if wiki not in (None,"jawiki","enwiki") or state not in (None,"viewed","partial","completed") or sort not in ("last_read","active_ms","title"):
             raise APIError("invalid_filter")
@@ -457,7 +466,7 @@ def create_app(database_url=None, mediawiki=None):
         return paginated(items,cursor,limit,key)
 
     @app.get(PREFIX+"/me/activities")
-    def activity(request: Request,wiki:str|None=None,source:str|None=None,from_:datetime|None=Query(None,alias="from"),to:datetime|None=None,cursor:str|None=None,limit:int=Query(50,ge=1,le=100),db=Depends(db_session)):
+    def activity(request: Request,wiki:str|None=None,source:str|None=None,from_:datetime|None=Query(None,alias="from"),to:datetime|None=None,cursor:str|None=None,limit:int=Query(50,ge=1,le=100),db=Depends(snapshot_session)):
         user,_,_ = authenticate(request,db)
         period(from_,to)
         if wiki not in (None,"jawiki","enwiki") or source not in (None,"android_reader","chrome_extension"):
@@ -466,7 +475,7 @@ def create_app(database_url=None, mediawiki=None):
         return paginated(items,cursor,limit,lambda a:(a["session_started_at"],a["session_id"]))
 
     @app.get(PREFIX+"/me/articles/{article_id}")
-    def record(article_id:UUID,request:Request,db=Depends(db_session)):
+    def record(article_id:UUID,request:Request,db=Depends(snapshot_session)):
         user,_,_ = authenticate(request,db)
         projected = replay(db,user.id)
         rec = next((r for r in projected["records"] if r["article_id"]==str(article_id)),None)
@@ -487,7 +496,9 @@ def create_app(database_url=None, mediawiki=None):
             db.add(state)
         state.state,state.updated_at = data.state,now()
         db.commit()
-        return record(article_id,request,db)
+        # The write is committed, so its connection is free before reading back.
+        with read_snapshot(factory) as snapshot:
+            return record(article_id,request,snapshot)
 
     @app.delete(PREFIX+"/me/articles/{article_id}/state")
     def restore_auto(article_id:UUID,request:Request,db=Depends(db_session)):
@@ -498,7 +509,7 @@ def create_app(database_url=None, mediawiki=None):
         return {"restored":True}
 
     @app.get(PREFIX+"/me/stats")
-    def get_stats(request:Request,from_:datetime|None=Query(None,alias="from"),to:datetime|None=None,wiki:str|None=None,timezone:str|None=None,db=Depends(db_session)):
+    def get_stats(request:Request,from_:datetime|None=Query(None,alias="from"),to:datetime|None=None,wiki:str|None=None,timezone:str|None=None,db=Depends(snapshot_session)):
         user,_,_ = authenticate(request,db)
         period(from_,to)
         tz = timezone or user.timezone
@@ -511,7 +522,7 @@ def create_app(database_url=None, mediawiki=None):
         return stats(replay(db,user.id),from_,to,wiki,tz)
 
     @app.get(PREFIX+"/me/achievements")
-    def get_achievements(request:Request,db=Depends(db_session)):
+    def get_achievements(request:Request,db=Depends(snapshot_session)):
         user,_,_ = authenticate(request,db)
         return {"items":achievements(replay(db,user.id))}
 
@@ -580,7 +591,7 @@ def create_app(database_url=None, mediawiki=None):
         return {"deleted":True,"recording_epoch":user.recording_epoch}
 
     @app.post(PREFIX+"/me/export")
-    def export(request:Request,db=Depends(db_session)):
+    def export(request:Request,db=Depends(export_session)):
         user,_,_ = authenticate(request,db,web_only=True)
         lock_user(db,user.id)
         data = replay(db,user.id)
@@ -602,7 +613,7 @@ def create_app(database_url=None, mediawiki=None):
         return response
 
     @app.get(PREFIX+"/profiles/{user_id}")
-    def profile(user_id:UUID,db=Depends(db_session)):
+    def profile(user_id:UUID,db=Depends(snapshot_session)):
         user = db.get(User,str(user_id))
         if not user or not user.profile_public:
             raise APIError("profile_not_found",404)

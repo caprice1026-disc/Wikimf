@@ -22,37 +22,81 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-class ApiFailure(val code: Int, val errorCode: String, val retryAfterMs: Long = 0) : IOException(errorCode)
+class ApiFailure(val code: Int, val errorCode: String, val retryAfterMs: Long = 0) : IOException(errorCode) {
+    internal var permit: RecordingControlOrder.Permit? = null
+    internal var controlTicket: RecordingControlOrder.Ticket? = null
+    internal fun current(settings: Settings): Boolean = (permit?.let { settings.controlOrder.current(it) } != false) &&
+        (controlTicket?.let { settings.controlOrder.current(it) } != false)
+}
 
 class Api(private val settings: Settings, private val http: OkHttpClient = OkHttpClient.Builder().callTimeout(20, TimeUnit.SECONDS).followRedirects(false).build()) {
-    private suspend fun <T> execute(request: Request, consume: (Response) -> T): T = suspendCancellableCoroutine { continuation ->
-        val call = http.newCall(request)
-        continuation.invokeOnCancellation { call.cancel() }
-        call.enqueue(object : Callback {
-            override fun onFailure(call: Call, error: IOException) { if (!continuation.isCancelled) continuation.resumeWithException(error) }
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    // Consume and parse the body on OkHttp's worker, including delayed/chunked reads.
-                    val result = response.use(consume)
-                    if (continuation.isActive) continuation.resume(result)
-                } catch (error: Exception) { if (continuation.isActive) continuation.resumeWithException(error) }
+    private suspend fun <T> execute(
+        request: Request, permit: RecordingControlOrder.Permit? = null, recording: Boolean = false,
+        validate: () -> Unit = {}, consume: (Response) -> T
+    ): T = suspendCancellableCoroutine { continuation ->
+        try {
+            settings.recordingLocked {
+                if (!continuation.isActive) return@recordingLocked
+                validate()
+                val client = if (permit == null) http else http.newBuilder().addInterceptor { chain ->
+                    // A call can wait in OkHttp after enqueue; check again at the HTTP boundary.
+                    settings.recordingLocked { validate() }
+                    chain.proceed(chain.request())
+                }.build()
+                val call = client.newCall(request)
+                val unregister = permit?.let { settings.controlOrder.register(it, recording) { call.cancel() } } ?: {}
+                continuation.invokeOnCancellation { call.cancel(); unregister() }
+                call.enqueue(object : Callback {
+                    override fun onFailure(call: Call, error: IOException) {
+                        unregister()
+                        val failure = try { settings.recordingLocked { validate() }; error } catch (changed: Exception) { changed }
+                        if (continuation.isActive) continuation.resumeWithException(failure)
+                    }
+                    override fun onResponse(call: Call, response: Response) {
+                        try {
+                            // Consume delayed/chunked bodies on OkHttp's worker, never the UI thread.
+                            val result = response.use(consume)
+                            settings.recordingLocked { validate() }
+                            if (continuation.isActive) continuation.resume(result)
+                        } catch (error: Exception) {
+                            val failure = try { settings.recordingLocked { validate() }; error } catch (changed: Exception) { changed }
+                            if (continuation.isActive) continuation.resumeWithException(failure)
+                        }
+                        finally { unregister() }
+                    }
+                })
             }
-        })
+        } catch (error: Exception) { if (continuation.isActive) continuation.resumeWithException(error) }
     }
-    suspend fun request(path: String, body: JSONObject? = null, device: LinkedDevice? = settings.device()): JSONObject {
-        val apiUrl = settings.apiUrl
+    suspend fun request(path: String, body: JSONObject? = null, device: LinkedDevice? = settings.device(), control: RecordingControlSnapshot? = null): JSONObject {
+        currentCoroutineContext().ensureActive()
+        val recording = path in setOf("/articles/resolve", "/reading-events/batch")
+        val (apiUrl, permit) = settings.recordingLocked { settings.apiUrl to (control?.permit ?: settings.controlOrder.permit()) }
+        fun validate() {
+            if (!settings.controlOrder.current(permit, recording = false) || settings.apiUrl != apiUrl || (device != null && device != settings.device())) throw ApiFailure(401, "device_binding_changed")
+            if (recording) {
+                if (device == null || !settings.cloudConsent || !settings.serverEnabled) throw ApiFailure(403, "recording_disabled")
+                if (control == null || !settings.controlOrder.current(permit)) throw ApiFailure(409, "recording_control_superseded")
+            }
+        }
         require(validBase(apiUrl)) { "API URLにはHTTPSを指定してください" }
-        if (device != null && device != settings.device()) throw ApiFailure(401, "device_binding_changed")
-        if (path in setOf("/articles/resolve", "/reading-events/batch") && (device == null || !settings.cloudConsent || !settings.serverEnabled)) throw ApiFailure(403, "recording_disabled")
         val builder = Request.Builder().url(apiUrl + path).header("Accept", "application/json")
         if (device != null) builder.header("Authorization", "Bearer ${device.token}")
         if (body != null) builder.post(body.toString().toRequestBody("application/json".toMediaType()))
-        return execute(builder.build()) { response ->
+        val result = try { execute(builder.build(), permit, recording, ::validate) { response ->
             val raw = response.body?.string() ?: "{}"
             val json = runCatching { JSONObject(raw) }.getOrElse { throw ApiFailure(response.code, "invalid_server_response") }
             if (!response.isSuccessful) throw ApiFailure(response.code, json.optJSONObject("error")?.optString("code") ?: "http_${response.code}", (response.header("Retry-After")?.toLongOrNull() ?: 0) * 1000)
             json
+        } } catch (failure: Exception) {
+            if (failure is CancellationException) throw failure
+            settings.recordingLocked { validate() }
+            if (failure is ApiFailure) failure.permit = permit
+            throw failure
         }
+        currentCoroutineContext().ensureActive()
+        settings.recordingLocked { validate() }
+        return result
     }
     suspend fun refreshDashboardOrigin() {
         val expectedApi = settings.apiUrl
@@ -65,20 +109,39 @@ class Api(private val settings: Settings, private val http: OkHttpClient = OkHtt
             // Offline/older servers retain the cached origin or same-origin fallback.
         }
     }
-    suspend fun recordingControl(store: LocalStore, device: LinkedDevice): JSONArray {
-        store.expire()
-        val control = request("/me/recording-control", device = device)
-        if (control.getString("user_id") != device.userId || control.getString("device_id") != device.deviceId) throw ApiFailure(403, "owner_mismatch")
-        if (settings.device() != device) throw ApiFailure(401, "device_binding_changed")
-        store.discardEpoch(device.userId, control.getInt("recording_epoch"))
-        val markers = control.optJSONArray("deletion_markers") ?: JSONArray()
-        store.discardDeleted(device.userId, markers)
-        settings.saveControl(control.getInt("recording_epoch"), control.getBoolean("collection_enabled"), markers)
-        return markers
+    suspend fun recordingControl(store: LocalStore, device: LinkedDevice): RecordingControlSnapshot {
+        currentCoroutineContext().ensureActive()
+        val ticket = settings.recordingLocked {
+            if (settings.device() != device) throw ApiFailure(401, "device_binding_changed")
+            settings.controlOrder.begin()
+        }
+        val control = try { request("/me/recording-control", device = device) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (failure: Exception) {
+            if (!settings.controlOrder.current(ticket)) throw ApiFailure(409, "recording_control_superseded")
+            if (failure is ApiFailure) failure.controlTicket = ticket
+            throw failure
+        }
+        currentCoroutineContext().ensureActive()
+        return settings.recordingLocked {
+            if (settings.device() != device) throw ApiFailure(401, "device_binding_changed")
+            if (!settings.controlOrder.current(ticket)) throw ApiFailure(409, "recording_control_superseded")
+            if (control.getString("user_id") != device.userId || control.getString("device_id") != device.deviceId) throw ApiFailure(403, "owner_mismatch").also { it.controlTicket = ticket }
+            val epoch = control.getInt("recording_epoch")
+            if (epoch < settings.epoch) throw ApiFailure(409, "recording_control_superseded")
+            val enabled = control.getBoolean("collection_enabled")
+            val markers = HistoryDeletion.merge(settings.deletionMarkers(), control.optJSONArray("deletion_markers") ?: JSONArray())
+            // Validate order/ownership before any irreversible queue cleanup or settings publication.
+            store.expire()
+            store.discardEpoch(device.userId, epoch)
+            store.discardDeleted(device.userId, markers)
+            settings.saveControl(epoch, enabled, markers)
+            RecordingControlSnapshot(epoch, markers, settings.controlOrder.permit())
+        }
     }
     suspend fun resolveArticle(store: LocalStore, url: String, device: LinkedDevice): JSONObject {
-        recordingControl(store, device)
-        return request("/articles/resolve", JSONObject().put("url", url), device)
+        val control = recordingControl(store, device)
+        return request("/articles/resolve", JSONObject().put("url", url), device, control)
     }
     suspend fun search(wiki: String, query: String, full: Boolean): List<HistoryEntry> {
         while (true) {
@@ -116,15 +179,19 @@ class Api(private val settings: Settings, private val http: OkHttpClient = OkHtt
     }
 }
 
+class RecordingControlSnapshot internal constructor(val epoch: Int, val markers: JSONArray, internal val permit: RecordingControlOrder.Permit)
+
 class SyncEngine(private val context: Context) {
     suspend fun sync(): Boolean = withContext(Dispatchers.IO) {
         val settings = Settings(context)
         val device = settings.device() ?: return@withContext true
+        val binding = settings.controlOrder.permit()
         val store = LocalStore(context)
         val api = Api(settings)
         try {
             repeat(20) {
-                val markers = api.recordingControl(store, device)
+                val control = api.recordingControl(store, device)
+                val markers = control.markers
                 if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件を端末で保持"; return@withContext true }
                 val pendingBefore = store.pending(device)
                 val rows = store.rows(device)
@@ -133,8 +200,9 @@ class SyncEngine(private val context: Context) {
                 for (row in rows) {
                     if (!SecurityPolicy.canSend(row.owner, row.device, device.userId, device.deviceId)) continue
                     var event = JSONObject(row.payload)
+                    if (event.optInt("recording_epoch") != control.epoch) continue
                     if (row.pendingUrl != null) {
-                        val article = try { api.request("/articles/resolve", JSONObject().put("url", row.pendingUrl), device) }
+                        val article = try { api.request("/articles/resolve", JSONObject().put("url", row.pendingUrl), device, control) }
                         catch (failure: ApiFailure) {
                             val terminal = (failure.code == 404 && failure.errorCode == "article_not_found") ||
                                 (failure.code in setOf(400, 422) && failure.errorCode in setOf("invalid_article_url", "unsupported_article_mode", "ambiguous_article_identifier", "invalid_page_id", "unsupported_article_url", "invalid_article_identifier"))
@@ -158,7 +226,7 @@ class SyncEngine(private val context: Context) {
                     return@withContext !settings.cloudConsent || !settings.serverEnabled || store.pending(device) == 0
                 }
                 if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件"; return@withContext true }
-                submit(api, store, device, ready)
+                submit(api, store, device, ready, control)
                 settings.status = "未送信 ${store.count(device.userId)}件・隔離 ${store.quarantined(device.userId)}件"
                 val pendingAfter = store.pending(device)
                 if (pendingAfter == 0) return@withContext true
@@ -167,20 +235,22 @@ class SyncEngine(private val context: Context) {
             false
         } catch (failure: Exception) {
             if (failure is kotlinx.coroutines.CancellationException) throw failure
+            if (!settings.controlOrder.current(binding, recording = false) || settings.device() != device) return@withContext true
+            if (failure is ApiFailure && failure.errorCode == "recording_control_superseded") return@withContext false
             if (failure is ApiFailure && failure.errorCode == "recording_disabled") { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件を端末で保持"; return@withContext true }
-            if (failure is ApiFailure && failure.code in setOf(401, 403)) { settings.status = "端末連携を確認してください"; settings.serverEnabled = false; return@withContext true }
+            if (failure is ApiFailure && failure.code in setOf(401, 403)) { settings.recordingLocked { if (settings.controlOrder.current(binding, recording = false) && settings.device() == device && failure.current(settings)) { settings.status = "端末連携を確認してください"; settings.serverEnabled = false } }; return@withContext true }
             else settings.status = "同期保留・${store.count(device.userId)}件（再試行可能）"
             store.rows(device).forEach { store.retry(it) }
             false
         } finally { store.close() }
     }
-    private suspend fun submit(api: Api, store: LocalStore, device: LinkedDevice, ready: List<Pair<QueueRow, JSONObject>>) {
-        val response = try { api.request("/reading-events/batch", JSONObject().put("schema_version", 1).put("events", JSONArray(ready.map { it.second })), device) }
+    private suspend fun submit(api: Api, store: LocalStore, device: LinkedDevice, ready: List<Pair<QueueRow, JSONObject>>, control: RecordingControlSnapshot) {
+        val response = try { api.request("/reading-events/batch", JSONObject().put("schema_version", 1).put("events", JSONArray(ready.map { it.second })), device, control) }
         catch (failure: ApiFailure) {
             when (failure.code) {
                 413 -> {
                     if (ready.size == 1) store.quarantine(ready[0].first.id, "payload_too_large")
-                    else { val midpoint = ready.size / 2; submit(api, store, device, ready.take(midpoint)); submit(api, store, device, ready.drop(midpoint)) }
+                    else { val midpoint = ready.size / 2; submit(api, store, device, ready.take(midpoint), control); submit(api, store, device, ready.drop(midpoint), control) }
                     return
                 }
                 422 -> { ready.forEach { store.quarantine(it.first.id, "schema_invalid") }; return }

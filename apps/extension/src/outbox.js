@@ -14,16 +14,17 @@ export class Outbox {
         new TextEncoder().encode(JSON.stringify(state)).length + MAX_OBSERVATION_BYTES + 200 <= QUEUE_LIMIT;
     });
   }
-  enqueue(owner, event) {
+  enqueue(owner, event, { isCurrent = () => true, isLatest = () => true } = {}) {
     return this.serial(async () => {
       const state = await this.read();
-      if (state.rows.some(row => row.event.event_id === event.event_id)) return;
+      if (!await isCurrent() || !isLatest()) return false;
+      if (state.rows.some(row => row.event.event_id === event.event_id)) return true;
       const row = { owner: { user_id: owner.user_id, device_id: owner.device_id }, created_at: this.now(), event: structuredClone(event) };
       if (event.device_id !== owner.device_id) throw new Error('device_mismatch');
       if (state.rows.some(item => this.now() - item.created_at > QUEUE_AGE_MS)) throw new Error('queue_expired');
       const bytes = new TextEncoder().encode(JSON.stringify({ ...state, rows: [...state.rows, row] })).length;
       if (bytes > QUEUE_LIMIT) throw new Error('queue_full');
-      state.rows.push(row); await this.storage.set({ outbox: state });
+      state.rows.push(row); await this.storage.set({ outbox: state }); return true;
     });
   }
   async batch(owner, maxEvents = 100, maxBytes = 240 * 1024) {
@@ -57,19 +58,35 @@ export class Outbox {
       await this.storage.set({ outbox: state });
     });
   }
-  applyControl(owner, control) {
+  applyControl(owner, control, { isCurrent = () => true, isLatest = () => true, persistControl = false } = {}) {
     return this.serial(async () => {
       const state = await this.read(); let removed = 0;
+      if (persistControl) {
+        const previous = (await this.storage.get('control')).control;
+        if (previous?.user_id === owner.user_id && previous.device_id === owner.device_id) {
+          if (control.recording_epoch < previous.recording_epoch) return null;
+          const markers = new Map((previous.deletion_markers || []).map(marker => [marker.article_id, marker]));
+          for (const marker of control.deletion_markers || []) {
+            const old = markers.get(marker.article_id);
+            if (!old || Date.parse(marker.deleted_before) > Date.parse(old.deleted_before)) markers.set(marker.article_id, marker);
+          }
+          control = { ...control, deletion_markers: [...markers.values()] };
+        }
+      }
+      // Check inside the queue transaction, after every wait and before any mutation.
+      if (!await isCurrent() || !isLatest()) return null;
       state.rows = state.rows.filter(row => {
         if (row.owner.user_id !== owner.user_id || row.owner.device_id !== owner.device_id) return true;
         const event = row.event;
         const deleted = (control.deletion_markers || []).some(marker => marker.article_id === event.article_id &&
           Date.parse(event.session_started_at) <= Date.parse(marker.deleted_before));
         const expired = this.now() - row.created_at > QUEUE_AGE_MS;
-        if (event.recording_epoch !== control.recording_epoch || deleted || expired) { removed++; return false; }
+        if (event.recording_epoch < control.recording_epoch || deleted || expired) { removed++; return false; }
         return true;
       });
-      state.lossCount += removed; await this.storage.set({ outbox: state }); return removed;
+      state.lossCount += removed;
+      // One write keeps the accepted control snapshot and its pruning in agreement.
+      await this.storage.set({ outbox: state, ...(persistControl ? { control } : {}) }); return removed;
     });
   }
   discard(owner) {

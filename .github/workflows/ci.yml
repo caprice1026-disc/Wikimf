@@ -101,7 +101,7 @@ jobs:
           target: google_apis
           working-directory: apps/android
           disable-animations: true
-          script: gradle connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.wikimf.reader.ApiTransportRegressionTest,org.wikimf.reader.ReaderLifecycleRegressionTest,org.wikimf.reader.PrivacyRegressionTest --no-daemon
+          script: gradle connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.wikimf.reader.ApiTransportRegressionTest,org.wikimf.reader.ReaderLifecycleRegressionTest,org.wikimf.reader.PrivacyRegressionTest,org.wikimf.reader.RecordingControlRegressionTest --no-daemon
       - name: Upload Android regression results
         if: always()
         uses: actions/upload-artifact@v4

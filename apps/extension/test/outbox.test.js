@@ -75,3 +75,39 @@ test('observation type boundary rejects embedded text, malformed chunks/interval
   assert.equal(validateObservation({...valid,article_id:'secret'}),false);
   assert.equal(validateObservation({...valid,progress:{...valid.progress,covered_chunk_ids:Array(50000).fill(0)}}),false);
 });
+
+test('control freshness is checked inside the serialized mutation and commits with its snapshot', async () => {
+  const storage = memory(), queue = new Outbox(storage), fresh = { ...event(), recording_epoch: 2 };
+  await queue.enqueue(user, fresh);
+  let release, latest = true;
+  const wait = new Promise(resolve => { release = resolve; });
+  const first = queue.serial(() => wait);
+  const stale = queue.applyControl(user, { recording_epoch: 1 }, { isCurrent: () => latest, persistControl: true });
+  latest = false; release(); await first;
+  assert.equal(await stale, null);
+  assert.equal((await queue.read()).rows[0].event.event_id, fresh.event_id);
+  assert.equal((await storage.get('control')).control, undefined);
+  const control = { recording_epoch: 2, deletion_markers: [] };
+  await queue.applyControl(user, control, { persistControl: true });
+  assert.deepEqual((await storage.get('control')).control, control);
+  assert.equal((await queue.read()).rows.length, 1);
+});
+test('a generation changed in the async guard continuation cannot prune or persist', async () => {
+  const storage = memory(), queue = new Outbox(storage); await queue.enqueue(user, event());
+  let latest = true;
+  const applied = await queue.applyControl(user, { recording_epoch: 2 }, {
+    isCurrent: async () => { queueMicrotask(() => { latest = false; }); return true; },
+    isLatest: () => latest, persistControl: true,
+  });
+  assert.equal(applied, null); assert.equal((await queue.read()).rows.length, 1);
+  assert.equal((await storage.get('control')).control, undefined);
+});
+
+test('control pruning never treats a future epoch as old and retains monotonic cutoffs', async () => {
+  const storage = memory(), queue = new Outbox(storage), future = { ...event(), recording_epoch: 3 };
+  await queue.enqueue(user, future);
+  await queue.applyControl(user, { ...user, recording_epoch: 2, deletion_markers: [] }, { persistControl: true });
+  assert.equal((await queue.read()).rows.length, 1);
+  assert.equal(await queue.applyControl(user, { ...user, recording_epoch: 1 }, { persistControl: true }), null);
+  assert.equal((await queue.read()).rows.length, 1);
+});

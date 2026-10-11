@@ -4,7 +4,6 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from .articles import article_json
 from .db import Article, ManualState, ReadingEvent, ReadingInterval, ReadingSession, now, utc
@@ -88,20 +87,8 @@ def contradictory(events):
 
 
 def replay(db, user_id):
-    # Authentication may already have started a READ COMMITTED transaction.
-    # Use a fresh read transaction so every SELECT sees the same committed state,
-    # without changing the isolation of ingestion/privacy writes.
-    engine = db.get_bind()
-    if engine.dialect.name == "postgresql":
-        engine = engine.execution_options(isolation_level="REPEATABLE READ")
-    with Session(engine) as snapshot:
-        if engine.dialect.name == "sqlite":
-            # sqlite3's legacy transaction mode does not BEGIN for SELECT.
-            snapshot.connection().exec_driver_sql("BEGIN")
-        return _replay(snapshot, user_id)
-
-
-def _replay(db, user_id):
+    # The caller owns the snapshot or user-lock transaction. Never acquire
+    # another pooled connection or end the caller's transaction here.
     rows = list(db.scalars(select(ReadingEvent).where(ReadingEvent.user_id == user_id).order_by(ReadingEvent.id)))
     sessions = {s.session_id: s for s in db.scalars(select(ReadingSession).where(ReadingSession.user_id == user_id))}
     groups = defaultdict(list)

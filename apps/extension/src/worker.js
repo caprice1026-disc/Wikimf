@@ -6,7 +6,17 @@ const api = chrome, storage = api.storage.local, outbox = new Outbox(storage);
 let syncing = null, retryAt = 0, failures = 0;
 let pairingPoll = null;
 let statusTail = Promise.resolve();
-const bindings = new Map();
+const bindings = new Map(), resolutions = new Map();
+let controlSequence = 0, appliedControlSequence = 0, localGeneration = 0, viewGeneration = 0, unlinking = false;
+const sameOwner = (left, right) => !!left && !!right && left.user_id === right.user_id &&
+  left.device_id === right.device_id && left.token === right.token;
+const invalidateLocal = () => { controlSequence++; return ++localGeneration; };
+const controlCurrent = grant => !!grant && grant.sequence === controlSequence && grant.generation === localGeneration;
+const currentOwner = async (auth, generation) => sameOwner(await owner(), auth) && generation === localGeneration;
+function cancelResolution(id, documentId, requestId) {
+  const current = resolutions.get(id);
+  if (!documentId || (current?.documentId === documentId && current.requestId === requestId)) resolutions.delete(id);
+}
 const ready = Promise.all([storage.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' }),api.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })]);
 const owner = async () => (await storage.get('credentials')).credentials;
 const settings = async () => ({ recording: false, ...((await storage.get('settings')).settings || {}) });
@@ -20,80 +30,124 @@ async function notifyStop() {
   const tabs = await api.tabs.query({ url: ['https://ja.wikipedia.org/*', 'https://en.wikipedia.org/*'] });
   await Promise.allSettled(tabs.map(tab => api.tabs.sendMessage(tab.id, { type: 'tracking.stop' }, { frameId: 0 })));
 }
-function updateSyncStatus(transition) {
+function updateSyncStatus(transition, isCurrent = () => true) {
   const result = statusTail.then(async () => {
     const current = (await storage.get('syncStatus')).syncStatus?.code || 'idle';
     const code = await transition(current);
+    if (!isCurrent()) return false;
     if (code !== current) await storage.set({ syncStatus: { code, at: Date.now() } });
     return code !== current;
   });
   statusTail = result.catch(() => {}); return result;
 }
-const setProblem = code => updateSyncStatus(current => nextSyncCode(current, code));
-const recoverQueueProblem = () => updateSyncStatus(async current =>
-  isQueueProblem(current) ? recoveredQueueCode(current, await outbox.canAcceptObservation()) : current);
+const setProblem = (code, isCurrent) => updateSyncStatus(current => nextSyncCode(current, code), isCurrent);
+const recoverQueueProblem = isCurrent => updateSyncStatus(async current =>
+  isQueueProblem(current) ? recoveredQueueCode(current, await outbox.canAcceptObservation()) : current, isCurrent);
 async function control(auth) {
-  const response = await request('/me/recording-control', { auth });
-  if (!response.ok) throw new Error(response.status === 401 ? 'reauth_required' : response.status === 403 ? 'device_revoked' : 'control_unavailable');
-  const result = await response.json();
-  if (result.user_id !== auth.user_id || result.device_id !== auth.device_id) throw new Error('owner_mismatch');
-  await outbox.applyControl(auth, result);
-  const recovered = await recoverQueueProblem();
-  const previous = (await storage.get('control')).control;
-  await storage.set({ control: result });
-  if (recovered || (previous && (previous.recording_epoch !== result.recording_epoch ||
-      JSON.stringify(previous.deletion_markers) !== JSON.stringify(result.deletion_markers)))) await notifyStop();
-  if (!result.collection_enabled) await notifyStop();
-  return result;
+  const grant = { sequence: ++controlSequence, generation: localGeneration };
+  const isCurrent = async () => {
+    const matches = sameOwner(await owner(), auth);
+    return matches && controlCurrent(grant);
+  };
+  try {
+    const response = await request('/me/recording-control', { auth });
+    if (!await isCurrent()) throw new Error('control_changed');
+    if (!response.ok) throw new Error(response.status === 401 ? 'reauth_required' : response.status === 403 ? 'device_revoked' : 'control_unavailable');
+    let result = await response.json();
+    if (!await isCurrent()) throw new Error('control_changed');
+    if (result.user_id !== auth.user_id || result.device_id !== auth.device_id) throw new Error('owner_mismatch');
+    const previous = (await storage.get('control')).control;
+    if (previous?.user_id === auth.user_id && previous.device_id === auth.device_id &&
+        result.recording_epoch < previous.recording_epoch) throw new Error('control_changed');
+    // A stale reply must not prune even one row. The guard runs inside the outbox's
+    // serial transaction, and the queue and control snapshot commit in one write.
+    if (await outbox.applyControl(auth, result, { isCurrent, isLatest: () => controlCurrent(grant), persistControl: true }) === null || !controlCurrent(grant))
+      throw new Error('control_changed');
+    result = (await storage.get('control')).control;
+    if (!controlCurrent(grant)) throw new Error('control_changed');
+    appliedControlSequence = grant.sequence;
+    const recovered = await recoverQueueProblem(() => controlCurrent(grant));
+    if (result.collection_enabled) await updateSyncStatus(current => current === 'server_paused' ? 'idle' : current, () => controlCurrent(grant));
+    if (!await isCurrent()) throw new Error('control_changed');
+    if (recovered || (previous && (previous.recording_epoch !== result.recording_epoch ||
+        JSON.stringify(previous.deletion_markers) !== JSON.stringify(result.deletion_markers)))) await notifyStop();
+    if (!result.collection_enabled) await notifyStop();
+    return { ...grant, remote: result };
+  } catch (error) {
+    if (!await isCurrent()) throw new Error('control_changed');
+    error.controlGrant = grant;
+    throw error;
+  }
 }
-function scheduleRetry(response) {
+function scheduleRetry(response, isCurrent = () => true) {
+  if (!isCurrent()) return;
   const retryAfter = response?.headers.get('Retry-After');
   const seconds = Number(retryAfter);
   const explicit = retryAfter ? (Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - Date.now()) : 0;
   failures++; retryAt = Date.now() + Math.max(explicit || 0, Math.min(3600000, 1000 * 2 ** Math.min(failures, 11)) * (0.75 + Math.random() / 2));
   return storage.set({ retryAt, retryState: { failures } });
 }
-async function sendBatch(auth, events) {
+async function sendBatch(auth, events, canSend) {
+  if (!await canSend() || !canSend.current()) return false;
   const response = await request('/reading-events/batch', { method: 'POST', auth, body: { schema_version: 1, events } });
+  if (!await canSend() || !canSend.current()) return false;
   if (response.status === 413) {
     if (events.length > 1) {
       const midpoint = Math.ceil(events.length / 2);
-      await sendBatch(auth, events.slice(0, midpoint)); await sendBatch(auth, events.slice(midpoint)); return;
+      return await sendBatch(auth, events.slice(0, midpoint), canSend) && await sendBatch(auth, events.slice(midpoint), canSend);
     }
     await outbox.applyAck(auth, { results: [{ event_id: events[0].event_id, status: 'rejected', code: 'event_too_large' }] }, new Set(events.map(event => event.event_id)));
-    if (await recoverQueueProblem()) await notifyStop(); return;
+    if (await recoverQueueProblem(canSend.current)) await notifyStop(); return true;
   }
   if (response.status === 401 || response.status === 403) {
-    await setProblem(response.status === 401 ? 'reauth_required' : 'device_revoked'); await notifyStop(); return;
+    await setProblem(response.status === 401 ? 'reauth_required' : 'device_revoked', canSend.current); await notifyStop(); return false;
   }
   if (response.status === 422) {
     await outbox.applyAck(auth, { results: events.map(event => ({ event_id: event.event_id, status: 'rejected', code: 'schema_mismatch' })) }, new Set(events.map(event => event.event_id)));
-    await setProblem('schema_mismatch'); return;
+    await setProblem('schema_mismatch', canSend.current); return false;
   }
-  if (!response.ok) { await scheduleRetry(response); throw new Error('retry_pending'); }
+  if (!response.ok) { await scheduleRetry(response, canSend.current); throw new Error('retry_pending'); }
   const result = await response.json();
+  if (!await canSend() || !canSend.current()) return false;
   await outbox.applyAck(auth, result, new Set(events.map(event => event.event_id)));
+  if (!canSend.current()) return false;
   failures = 0; retryAt = 0; await storage.set({ retryAt: 0, retryState: { failures: 0 } });
-  if (await recoverQueueProblem()) await notifyStop();
-  await setProblem('synced');
-  if (result.recording_epoch !== auth.recording_epoch) await control(auth);
+  if (await recoverQueueProblem(canSend.current)) await notifyStop();
+  await setProblem('synced', canSend.current);
+  if (result.recording_epoch !== canSend.epoch) await control(auth);
+  return true;
 }
-async function sync(force = false) {
-  if (syncing) return force ? syncing.then(() => sync(true)) : syncing;
+async function sync(force = false, expectedAuth = null, expectedGeneration = localGeneration) {
+  if (syncing) return force ? syncing.then(() => sync(true, expectedAuth, expectedGeneration)) : syncing;
   syncing = (async () => {
     await ready;
-    const auth = await owner(), options = await settings();
+    const generation = localGeneration, auth = await owner(), options = await settings();
     retryAt = Math.max(retryAt, (await storage.get('retryAt')).retryAt || 0);
     failures = Math.max(failures, (await storage.get('retryState')).retryState?.failures || 0);
-    if (!auth || (!force && (!options.sendQueued || Date.now() < retryAt))) return;
+    if (!auth || (expectedAuth && !sameOwner(auth, expectedAuth)) || expectedGeneration !== localGeneration || generation !== localGeneration ||
+        (!force && (unlinking || !(options.recording || options.sendQueued) || Date.now() < retryAt))) return false;
+    let grant;
     try {
-      const remote = await control(auth);
-      if (!remote.collection_enabled) { await setProblem('server_paused'); return; }
+      grant = await control(auth);
+      const canSend = async () => {
+        const state = await storage.get(['credentials', 'settings']);
+        return controlCurrent(grant) && sameOwner(state.credentials, auth) &&
+          (force || (!unlinking && (state.settings?.recording || state.settings?.sendQueued)));
+      };
+      canSend.current = () => controlCurrent(grant);
+      canSend.epoch = grant.remote.recording_epoch;
+      if (!await canSend() || !canSend.current()) return false;
+      if (!grant.remote.collection_enabled) { await setProblem('server_paused', canSend.current); return false; }
       const events = await outbox.batch(auth);
-      if (events.length) await sendBatch(auth, events);
+      return !events.length || await sendBatch(auth, events, canSend);
     } catch (error) {
+      if (error.message === 'control_changed' || !await currentOwner(auth, generation)) return false;
+      const isCurrent = () => controlCurrent(grant || error.controlGrant);
+      if (!isCurrent()) return false;
       const code = ['reauth_required', 'device_revoked', 'owner_mismatch'].includes(error.message) ? error.message : 'offline';
-      await setProblem(code); if (code !== 'offline') await notifyStop(); else await scheduleRetry();
+      await setProblem(code, isCurrent);
+      if (isCurrent()) { if (code !== 'offline') await notifyStop(); else await scheduleRetry(undefined, isCurrent); }
+      return false;
     }
   })().finally(() => { syncing = null; });
   return syncing;
@@ -132,13 +186,19 @@ async function pollPairing() {
     throw new Error('pairing_failed');
   }
   const auth = await response.json();
-  await storage.set({ credentials: auth, settings: { recording: false, sendQueued: true }, control: null });
+  await outbox.serial(async () => {
+    if ((await storage.get('pairing')).pairing?.link_id !== pairing.link_id || await owner()) throw new Error('pairing_failed');
+    invalidateLocal();
+    await storage.set({ credentials: auth, settings: { recording: false, sendQueued: true }, control: null });
+  });
   // Completing an explicit new device link is the user's terminal-error recovery action.
   await updateSyncStatus(() => 'idle');
   await storage.remove('pairing'); return { pending: false, linked: true };
 }
 async function status() {
-  const auth = await owner(), state = await outbox.read(), options = await settings(), stored = await storage.get(['syncStatus', 'pairing', 'control']);
+  const generation = localGeneration, sequence = controlSequence, applied = appliedControlSequence;
+  const stored = await storage.get(['credentials', 'outbox', 'settings', 'syncStatus', 'pairing', 'control']);
+  const auth = stored.credentials, state = stored.outbox || { rows: [], quarantine: [], lossCount: 0 }, options = { recording: false, ...stored.settings };
   const code = stored.syncStatus?.code || 'idle';
   let currentArticle = null;
   const tab = await focusedTab(api);
@@ -153,29 +213,50 @@ async function status() {
       }
     } catch { /* The persisted queue status is available even when article metadata is offline. */ }
   }
+  if (generation !== localGeneration || sequence !== controlSequence || applied !== appliedControlSequence) return status();
   return { linked: !!auth, display_name: auth?.display_name, recording: options.recording, sendQueued: !!options.sendQueued,
-    recording_enabled: !!auth && options.recording && !recordingBlocked(code) && stored.control?.collection_enabled !== false,
+    recording_enabled: !!auth && !unlinking && options.recording && !recordingBlocked(code) &&
+      appliedControlSequence === controlSequence && stored.control?.collection_enabled === true,
     queued: state.rows.filter(row => row.owner.user_id === auth?.user_id && row.owner.device_id === auth?.device_id).length,
     rejected: state.quarantine.length, discarded: state.lossCount, sync: code,
     current_article: currentArticle,
     pairing: stored.pairing ? { user_code: stored.pairing.user_code, expires_at: stored.pairing.expires_at } : null, dashboard_url: DASHBOARD_ORIGIN };
 }
 async function contentMessage(message, sender) {
+  if (message.type === 'article.cancel') {
+    cancelResolution(sender.tab.id, sender.documentId, message.request_id); return { canceled: true };
+  }
+  const generation = localGeneration, view = viewGeneration, sequence = controlSequence, applied = appliedControlSequence;
+  const resolution = message.type === 'article.resolve' ? { documentId: sender.documentId, requestId: message.request_id, locationKey: JSON.stringify(articleLocation(sender.url)) } : null;
+  if (resolution) resolutions.set(sender.tab.id, resolution);
   const auth = await owner(), options = await settings();
-  if (!auth || (!options.recording && !(message.type === 'observation' && message.event?.type === 'session.closed'))) return { enabled: false };
+  if (unlinking || generation !== localGeneration || !auth || (!options.recording && !(message.type === 'observation' && message.event?.type === 'session.closed'))) return { enabled: false };
   if (message.type === 'lease') {
     const tab = await focusedTab(api);
     const remote = (await storage.get('control')).control;
     const denied = recordingBlocked((await storage.get('syncStatus')).syncStatus?.code);
     const binding = bindings.get(sender.tab.id) || (await api.storage.session.get('binding:' + sender.tab.id))['binding:' + sender.tab.id];
     const deleted = remote?.deletion_markers?.some(marker => marker.article_id === binding?.article_id && Date.now() <= Date.parse(marker.deleted_before));
-    return { enabled: !denied && !deleted && remote?.collection_enabled === true && tab?.id === sender.tab.id,
+    return { enabled: generation === localGeneration && view === viewGeneration && sequence === controlSequence &&
+      applied === appliedControlSequence && applied === sequence &&
+      !unlinking && !denied && !deleted && remote?.collection_enabled === true && tab?.id === sender.tab.id,
       lease_until: Date.now() + 15000 };
   }
   if (message.type === 'article.resolve') {
-    const remote = await control(auth);
-    // Recheck local state after the network wait before disclosing an article URL.
-    if (!remote.collection_enabled || !(await settings()).recording || (await owner())?.device_id !== auth.device_id) return { enabled: false };
+    let grant;
+    try { grant = await control(auth); }
+    catch (error) { if (error.message === 'control_changed') return { enabled: false }; throw error; }
+    const currentResolution = () => controlCurrent(grant) && generation === localGeneration && view === viewGeneration &&
+      !unlinking && resolutions.get(sender.tab.id) === resolution;
+    const stillEligible = async () => {
+      const state = await storage.get(['credentials', 'settings', 'syncStatus']);
+      const tab = await focusedTab(api);
+      return currentResolution() && sameOwner(state.credentials, auth) && state.settings?.recording &&
+        !recordingBlocked(state.syncStatus?.code) && tab?.id === sender.tab.id &&
+        (!tab.url || JSON.stringify(articleLocation(tab.url)) === JSON.stringify(articleLocation(sender.url)));
+    };
+    // No await between the final generation check and URL transmission.
+    if (!grant.remote.collection_enabled || !await stillEligible() || !currentResolution()) return { enabled: false };
     const location = articleLocation(sender.url);
     const canonical = new URL(sender.url); canonical.hash = ''; canonical.search = '';
     if (canonical.pathname === '/w/index.php') {
@@ -184,12 +265,17 @@ async function contentMessage(message, sender) {
     const response = await request('/articles/resolve', { method: 'POST', auth, body: { url: canonical.href } });
     if (!response.ok) return { enabled: false, code: 'article_unresolved' };
     const article = await response.json();
-    if (article.namespace !== 0 || !article.trackable || !remote.collection_enabled) return { enabled: false };
-    const binding = { document_id: sender.documentId, user_id: auth.user_id, device_id: auth.device_id, article_id: article.article_id, wiki: article.wiki, page_id: article.page_id };
-    bindings.set(sender.tab.id, binding);
-    await api.storage.session.set({ ['binding:' + sender.tab.id]: binding });
-    if (remote.deletion_markers?.some(marker => marker.article_id === article.article_id && Date.now() <= Date.parse(marker.deleted_before))) return { enabled: false };
-    return { enabled: true, article, device_id: auth.device_id, recording_epoch: remote.recording_epoch, client_version: CLIENT_VERSION };
+    if (article.namespace !== 0 || !article.trackable || !await stillEligible() || !currentResolution()) return { enabled: false };
+    const binding = { document_id: sender.documentId, location_key: resolution.locationKey, user_id: auth.user_id, device_id: auth.device_id, article_id: article.article_id, wiki: article.wiki, page_id: article.page_id };
+    // Serialize against unlink so an old response cannot recreate a cleared binding.
+    const bound = await outbox.serial(async () => {
+      if (!await stillEligible() || !currentResolution()) return false;
+      bindings.set(sender.tab.id, binding);
+      await api.storage.session.set({ ['binding:' + sender.tab.id]: binding }); return true;
+    });
+    if (!bound || !await stillEligible() || !currentResolution()) return { enabled: false };
+    if (grant.remote.deletion_markers?.some(marker => marker.article_id === article.article_id && Date.now() <= Date.parse(marker.deleted_before))) return { enabled: false };
+    return { enabled: true, article, device_id: auth.device_id, recording_epoch: grant.remote.recording_epoch, client_version: CLIENT_VERSION };
   }
   if (message.type === 'observation') {
     const event = message.event, location = articleLocation(sender.url);
@@ -202,12 +288,16 @@ async function contentMessage(message, sender) {
     if (Object.keys(event.document || {}).some(key => !['fingerprint','extractor_version','observed_revision_id','text_chars','chunk_chars'].includes(key)) ||
         Object.keys(event.progress || {}).some(key => !['active_ms_total','covered_chunk_ids','measurement_status','reason_code','max_scroll_ratio'].includes(key))) throw new Error('unknown_observation_field');
     if (!validateObservation(event)) throw new Error('invalid_observation');
-    try { await outbox.enqueue(auth, event); } catch (error) { await setProblem(error.message); await notifyStop(); throw error; }
+    try {
+      if (!await outbox.enqueue(auth, event, { isCurrent: () => currentOwner(auth, generation),
+        isLatest: () => generation === localGeneration && !unlinking })) return { saved: false };
+    } catch (error) { await setProblem(error.message, () => generation === localGeneration); await notifyStop(); throw error; }
     void sync(); return { saved: true };
   }
   throw new Error('unknown_message');
 }
 async function pageMessage(message) {
+  const generation = ['recording', 'logout'].includes(message.type) ? invalidateLocal() : localGeneration;
   const auth = await owner();
   switch (message.type) {
     case 'status': return status();
@@ -215,22 +305,52 @@ async function pageMessage(message) {
     case 'pair.poll': return pairPoll();
     case 'recording': {
       if (!auth) throw new Error('link_required');
-      if (message.enabled) { await control(auth); const remote = (await storage.get('control')).control; if (!remote.collection_enabled) throw new Error('server_paused'); }
-      await storage.set({ settings: { recording: !!message.enabled, sendQueued: message.enabled ? true : !!message.sendQueued } });
-      await notifyStop(); if (message.sendQueued || message.enabled) void sync(true); return status();
+      if (unlinking) throw new Error('unsent_records');
+      const previousOptions = await settings();
+      if (message.enabled && !previousOptions.recording) {
+        const grant = await control(auth);
+        if (!grant.remote.collection_enabled) throw new Error('server_paused');
+      }
+      const changed = await outbox.serial(async () => {
+        if (!await currentOwner(auth, generation) || generation !== localGeneration) return false;
+        await storage.set({ settings: { recording: !!message.enabled, sendQueued: !!message.sendQueued } }); return true;
+      });
+      if (changed) { await notifyStop(); if (message.sendQueued || message.enabled) void sync(); }
+      return status();
     }
-    case 'sync': await sync(true); return status();
+    case 'sync': await sync(true, auth, generation); return status();
     case 'discard':
       if (auth) { await outbox.discard(auth); if (await recoverQueueProblem()) await notifyStop(); }
       return status();
     case 'logout': {
       if (!auth) return status();
-      const pending = (await outbox.batch(auth)).length;
-      if (pending && !message.discard) { await sync(true); if ((await outbox.batch(auth)).length) throw new Error('unsent_records'); }
-      if (message.discard) await outbox.discard(auth);
-      await storage.remove(['credentials', 'control', 'pairing']);
-      bindings.clear(); await api.storage.session.clear();
-      await storage.set({ settings: { recording: false, sendQueued: false } }); await notifyStop(); return status();
+      if (unlinking) throw new Error('unsent_records');
+      unlinking = true;
+      try {
+        await notifyStop();
+        const ownRows = async () => (await outbox.read()).rows.filter(row =>
+          row.owner.user_id === auth.user_id && row.owner.device_id === auth.device_id).length;
+        let pending = await ownRows();
+        // Each round must remove at least one row; the initial count and deadline
+        // bound partial ACK servers too. Failure never destroys the remaining rows.
+        const deadline = Date.now() + 120000;
+        for (let rounds = pending; pending && !message.discard && rounds > 0; rounds--) {
+          if (Date.now() >= deadline || !await currentOwner(auth, generation) || !await sync(true, auth, generation)) throw new Error('unsent_records');
+          const remaining = await ownRows();
+          if (remaining >= pending) throw new Error('unsent_records');
+          pending = remaining;
+        }
+        if (pending && !message.discard) throw new Error('unsent_records');
+        if (!await currentOwner(auth, generation) || generation !== localGeneration) throw new Error('unsent_records');
+        if (message.discard) await outbox.discard(auth);
+        await outbox.serial(async () => {
+          if (!await currentOwner(auth, generation) || generation !== localGeneration) throw new Error('unsent_records');
+          await storage.remove(['credentials', 'control', 'pairing']);
+          bindings.clear(); resolutions.clear(); await api.storage.session.clear();
+          await storage.set({ settings: { recording: false, sendQueued: false } });
+        });
+      } finally { unlinking = false; await notifyStop(); }
+      return status();
     }
     default: throw new Error('unknown_message');
   }
@@ -241,9 +361,18 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   ready.then(() => content ? contentMessage(message, sender) : pageMessage(message))
     .then(sendResponse).catch(error => sendResponse({ error: error.message })); return true;
 });
-api.tabs.onActivated.addListener(() => { void notifyStop(); });
-api.tabs.onRemoved.addListener(id => { bindings.delete(id); void api.storage.session.remove('binding:' + id); });
-api.windows.onFocusChanged.addListener(() => { void notifyStop(); });
+api.tabs.onActivated.addListener(() => { viewGeneration++; resolutions.clear(); void notifyStop(); });
+api.tabs.onRemoved.addListener(id => { cancelResolution(id); bindings.delete(id); void api.storage.session.remove('binding:' + id); });
+api.tabs.onUpdated.addListener(async (id, change) => {
+  if (change.status !== 'loading' && !change.url) return;
+  if (change.status !== 'loading') {
+    const known = resolutions.get(id)?.locationKey || bindings.get(id)?.location_key ||
+      (await api.storage.session.get('binding:' + id))['binding:' + id]?.location_key;
+    if (known === JSON.stringify(articleLocation(change.url))) return; // Fragments keep the Document.
+  }
+  cancelResolution(id); bindings.delete(id); await api.storage.session.remove('binding:' + id);
+});
+api.windows.onFocusChanged.addListener(() => { viewGeneration++; resolutions.clear(); void notifyStop(); });
 api.alarms.onAlarm.addListener(alarm => { if (alarm.name === 'wikimf-sync') { void sync(); void pairPoll().catch(() => {}); } });
 api.runtime.onInstalled.addListener(() => { void api.alarms.create('wikimf-sync', { periodInMinutes: 1 }); });
 api.runtime.onStartup.addListener(() => { void api.alarms.create('wikimf-sync', { periodInMinutes: 1 }); void sync(); });

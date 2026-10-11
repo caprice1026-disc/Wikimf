@@ -20,9 +20,11 @@ data class LinkedDevice(val userId: String, val deviceId: String, val token: Str
 
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("preferences", Context.MODE_PRIVATE)
+    internal val controlOrder = synchronized(controlOrders) { controlOrders.getOrPut(prefs) { RecordingControlOrder() } }
+    internal fun <T> recordingLocked(block: () -> T): T = synchronized(controlOrder.lock, block)
     var apiUrl: String
         get() = prefs.getString("api_url", BuildConfig.DEFAULT_API_URL)!!
-        set(value) {
+        set(value) = recordingLocked {
             val normalized = value.trimEnd('/')
             if (normalized != apiUrl) {
                 // Clear credentials before publishing a different API destination.
@@ -38,7 +40,7 @@ class Settings(context: Context) {
         set(value) { prefs.edit().putBoolean("local_consent", value).apply() }
     var cloudConsent: Boolean
         get() = prefs.getBoolean("cloud_consent", false)
-        set(value) { prefs.edit().putBoolean("cloud_consent", value).apply() }
+        set(value) = recordingLocked { if (value != cloudConsent) controlOrder.invalidate(); prefs.edit().putBoolean("cloud_consent", value).apply() }
     var paused: Boolean
         get() = prefs.getBoolean("paused", false)
         set(value) { prefs.edit().putBoolean("paused", value).apply() }
@@ -47,17 +49,19 @@ class Settings(context: Context) {
         set(value) { prefs.edit().putString("sync_status", value).apply() }
     var epoch: Int
         get() = prefs.getInt("epoch", 1)
-        set(value) { prefs.edit().putInt("epoch", value).apply() }
+        set(value) = recordingLocked { if (value != epoch) controlOrder.invalidate(); prefs.edit().putInt("epoch", value).apply() }
     var serverEnabled: Boolean
         get() = prefs.getBoolean("server_enabled", true)
-        set(value) { prefs.edit().putBoolean("server_enabled", value).apply() }
+        set(value) = recordingLocked { if (value != serverEnabled) controlOrder.invalidate(); prefs.edit().putBoolean("server_enabled", value).apply() }
     fun deletionCutoff(articleId: String?): Long? = HistoryDeletion.cutoff(JSONArray(prefs.getString("deletion_markers", "[]")), articleId)
-    fun saveControl(epoch: Int, enabled: Boolean, markers: JSONArray) {
+    internal fun deletionMarkers(): JSONArray = JSONArray(prefs.getString("deletion_markers", "[]"))
+    internal fun saveControl(epoch: Int, enabled: Boolean, markers: JSONArray) = recordingLocked {
+        if (epoch != this.epoch || enabled != serverEnabled || markers.toString() != deletionMarkers().toString()) controlOrder.invalidate()
         prefs.edit().putInt("epoch", epoch).putBoolean("server_enabled", enabled).putString("deletion_markers", markers.toString()).apply()
     }
     fun observeControl(changed: () -> Unit): () -> Unit {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key in setOf("epoch", "server_enabled", "deletion_markers")) changed()
+            if (key in setOf("epoch", "server_enabled", "deletion_markers", "cloud_consent", "paused", "api_url")) changed()
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
         return { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
@@ -82,18 +86,37 @@ class Settings(context: Context) {
         val json = JSONObject(String(cipher.doFinal(bytes.copyOfRange(12, bytes.size)), Charsets.UTF_8))
         LinkedDevice(json.getString("user_id"), json.getString("device_id"), json.getString("token"), json.getString("display_name"))
     }.getOrNull()
-    fun saveDevice(device: LinkedDevice) {
+    fun saveDevice(device: LinkedDevice) = recordingLocked {
         val json = JSONObject().put("user_id", device.userId).put("device_id", device.deviceId).put("token", device.token).put("display_name", device.displayName)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
         val packed = cipher.iv + cipher.doFinal(json.toString().toByteArray(Charsets.UTF_8))
+        controlOrder.invalidate(bindingChanged = true)
         secure.edit().putString("device", Base64.encodeToString(packed, Base64.NO_WRAP)).commit()
-        prefs.edit().remove("deletion_markers").apply()
+        prefs.edit().remove("deletion_markers").putInt("epoch", 1).putBoolean("server_enabled", false).apply()
         cloudConsent = false
     }
-    fun unlink() { secure.edit().clear().commit(); cloudConsent = false; prefs.edit().remove("deletion_markers").apply(); status = "未連携" }
+    fun unlink() = recordingLocked {
+        controlOrder.invalidate(bindingChanged = true)
+        secure.edit().clear().commit(); cloudConsent = false
+        prefs.edit().remove("deletion_markers").putInt("epoch", 1).putBoolean("server_enabled", false).apply(); status = "未連携"
+    }
+    companion object {
+        private val controlOrders = java.util.WeakHashMap<SharedPreferences, RecordingControlOrder>()
+    }
 }
 
 object HistoryDeletion {
+    // Cutoffs are privacy tombstones: never lose one because a later snapshot omits it.
+    fun merge(previous: JSONArray, received: JSONArray): JSONArray {
+        val latest = sortedMapOf<String, java.time.Instant>()
+        for (markers in listOf(previous, received)) for (i in 0 until markers.length()) {
+            val marker = markers.getJSONObject(i)
+            val id = marker.getString("article_id")
+            val cutoff = java.time.Instant.parse(marker.getString("deleted_before"))
+            if (latest[id] == null || cutoff > latest.getValue(id)) latest[id] = cutoff
+        }
+        return JSONArray(latest.map { (id, cutoff) -> JSONObject().put("article_id", id).put("deleted_before", cutoff.toString()) })
+    }
     fun cutoff(markers: JSONArray, articleId: String?): Long? {
         if (articleId == null) return null
         return (0 until markers.length()).map { markers.getJSONObject(it) }
@@ -181,7 +204,7 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "wikimf.sqlite", 
     fun discard(owner: String) { writableDatabase.delete("outbox", "owner=?", arrayOf(owner)); writableDatabase.delete("diagnostics", "owner=?", arrayOf(owner)) }
     fun discardEpoch(owner: String, epoch: Int) {
         readableDatabase.rawQuery("SELECT id,payload FROM outbox WHERE owner=?", arrayOf(owner)).use { cursor ->
-            val ids = buildList { while (cursor.moveToNext()) if (runCatching { JSONObject(cursor.getString(1)).optInt("recording_epoch") }.getOrNull() != epoch) add(cursor.getString(0)) }
+            val ids = buildList { while (cursor.moveToNext()) if ((runCatching { JSONObject(cursor.getString(1)).optInt("recording_epoch") }.getOrNull() ?: 0) < epoch) add(cursor.getString(0)) }
             ids.forEach { quarantine(it, "recording_epoch_changed") }
         }
     }

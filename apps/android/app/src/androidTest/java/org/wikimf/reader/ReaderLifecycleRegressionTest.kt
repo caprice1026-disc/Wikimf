@@ -23,6 +23,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 @RunWith(AndroidJUnit4::class)
 class ReaderLifecycleRegressionTest {
@@ -35,6 +36,9 @@ class ReaderLifecycleRegressionTest {
         val articleId = UUID.randomUUID().toString()
         val markers = AtomicReference(JSONArray())
         val resolveOffline = AtomicBoolean(false)
+        val delayControl = AtomicBoolean(false)
+        val controlRequests = AtomicInteger()
+        val resolveRequests = AtomicInteger()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
         var active = true
@@ -44,13 +48,17 @@ class ReaderLifecycleRegressionTest {
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
+                    if (request.path!!.endsWith("/recording-control")) controlRequests.incrementAndGet()
+                    if (request.path!!.endsWith("/articles/resolve")) resolveRequests.incrementAndGet()
                     if (request.path!!.endsWith("/articles/resolve") && resolveOffline.get()) return MockResponse().setResponseCode(503).setBody("{}")
                     val json = when {
                         request.path!!.endsWith("/recording-control") -> JSONObject().put("user_id", device.userId).put("device_id", device.deviceId).put("recording_epoch", 1).put("collection_enabled", true).put("deletion_markers", markers.get())
                         request.path!!.endsWith("/articles/resolve") -> JSONObject().put("article_id", articleId).put("wiki", "enwiki").put("page_id", 9228).put("namespace", 0).put("trackable", true)
                         else -> JSONObject().put("effective_state", "viewed").put("evidence", "inferred")
                     }
-                    return MockResponse().setHeader("Content-Type", "application/json").setBody(json.toString())
+                    return MockResponse().setHeader("Content-Type", "application/json").setBody(json.toString()).apply {
+                        if (request.path!!.endsWith("/recording-control") && delayControl.get()) setBodyDelay(1500, TimeUnit.MILLISECONDS)
+                    }
                 }
             }
             server.start()
@@ -133,6 +141,34 @@ class ReaderLifecycleRegressionTest {
                 val recoveredEvent = awaitOpened(recovered)
                 assertEquals(articleId, recoveredEvent.getString("article_id"))
                 assertTrue("Offline recovery must retire the old session and wait for the known deletion cutoff", java.time.Instant.parse(recoveredEvent.getString("session_started_at")).toEpochMilli() > recoveryCutoff)
+                // Closing/hiding the Reader or pausing while control is in flight must cancel
+                // the operation before an article URL is sent, not merely ignore its result.
+                for (mode in listOf("account", "search", "background", "pause")) {
+                    delayControl.set(true)
+                    val beforeControl = controlRequests.get()
+                    val beforeResolve = resolveRequests.get()
+                    instrumentation.runOnMainSync { controller!!.webView!!.reload() }
+                    repeat(100) { if (controlRequests.get() == beforeControl) Thread.sleep(50) }
+                    assertTrue("$mode fixture must reach its delayed control request", controlRequests.get() > beforeControl)
+                    instrumentation.runOnMainSync {
+                        if (mode == "pause") settings.paused = true else active = false
+                        controller!!.activeChanged()
+                    }
+                    Thread.sleep(1800)
+                    assertEquals("$mode must not send the URL after leaving active recording", beforeResolve, resolveRequests.get())
+                    delayControl.set(false)
+                    instrumentation.runOnMainSync { active = true; settings.paused = false; controller!!.webView!!.reload() }
+                    awaitSession()
+                }
+                delayControl.set(true)
+                val beforeDestroyControl = controlRequests.get()
+                val beforeDestroyResolve = resolveRequests.get()
+                instrumentation.runOnMainSync { controller!!.webView!!.reload() }
+                repeat(100) { if (controlRequests.get() == beforeDestroyControl) Thread.sleep(50) }
+                assertTrue(controlRequests.get() > beforeDestroyControl)
+                instrumentation.runOnMainSync { controller!!.destroy() }
+                Thread.sleep(1800)
+                assertEquals("Destroy must cancel control before sending a stale page URL", beforeDestroyResolve, resolveRequests.get())
             } finally {
                 instrumentation.runOnMainSync { unsubscribe?.invoke(); controller?.destroy(); activity.finish() }
                 scope.cancel(); store.discard(device.userId); store.close(); settings.unlink(); settings.apiUrl = originalApi

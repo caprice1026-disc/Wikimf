@@ -272,6 +272,7 @@ internal class ReaderController(
     var url: String = ""
     var articleId: String? = null
     private var article: JSONObject? = null
+    private var articleDevice: LinkedDevice? = null
     private val guard = BridgeGuard()
     private var bridgeEnabled = false
     private var contextStarted = false
@@ -306,6 +307,7 @@ internal class ReaderController(
             WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
             bridgeEnabled = WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)
             if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) WebViewCompat.addWebMessageListener(this, "WikimfObservation", UrlPolicy.origins) { view, msg, origin, mainFrame, _ ->
+                if (view !== webView) return@addWebMessageListener
                 val payload = msg.data ?: return@addWebMessageListener
                 if (!SecurityPolicy.acceptsBridge(origin.toString(), mainFrame, payload.toByteArray().size, view.url ?: "")) return@addWebMessageListener
                 val event = runCatching { JSONObject(payload) }.getOrNull() ?: return@addWebMessageListener
@@ -315,39 +317,43 @@ internal class ReaderController(
                     return@addWebMessageListener
                 }
                 val device = sessionDevice ?: return@addWebMessageListener
-                if (!contextStarted || !guard.accepts(event, System.currentTimeMillis())) return@addWebMessageListener
-                event.put("source", "android_reader").put("device_id", device.deviceId).put("recording_epoch", sessionEpoch)
-                val currentArticle = article
-                val cutoff = this@ReaderController.settings.deletionCutoff(currentArticle?.optString("article_id"))
-                if (cutoff != null && java.time.Instant.parse(event.getString("session_started_at")).toEpochMilli() <= cutoff) return@addWebMessageListener
-                if (currentArticle != null) event.put("article_id", currentArticle.getString("article_id")).put("wiki", currentArticle.getString("wiki")).put("page_id", currentArticle.getLong("page_id"))
-                val accepted = store.enqueue(device, event, if (currentArticle == null) this@ReaderController.url.substringBefore('#') else null)
+                val accepted = this@ReaderController.settings.recordingLocked {
+                    if (!contextStarted || this@ReaderController.settings.device() != device || this@ReaderController.settings.epoch != sessionEpoch || !this@ReaderController.settings.cloudConsent || !this@ReaderController.settings.serverEnabled || !guard.accepts(event, System.currentTimeMillis())) return@recordingLocked null
+                    event.put("source", "android_reader").put("device_id", device.deviceId).put("recording_epoch", sessionEpoch)
+                    val currentArticle = article
+                    val cutoff = this@ReaderController.settings.deletionCutoff(currentArticle?.optString("article_id"))
+                    if (cutoff != null && java.time.Instant.parse(event.getString("session_started_at")).toEpochMilli() <= cutoff) return@recordingLocked null
+                    if (currentArticle != null) event.put("article_id", currentArticle.getString("article_id")).put("wiki", currentArticle.getString("wiki")).put("page_id", currentArticle.getLong("page_id"))
+                    store.enqueue(device, event, if (currentArticle == null) this@ReaderController.url.substringBefore('#') else null)
+                } ?: return@addWebMessageListener
                 if (!accepted) { this@ReaderController.settings.paused = true; status = "未送信キュー上限に達したため記録を停止しました"; activeChanged(false) }
                 else SyncEngine.schedule(activity.applicationContext)
-                if (event.getString("type") != "session.opened" && currentArticle != null) refreshState()
+                if (event.getString("type") != "session.opened" && article != null) refreshState()
                 changed()
             }
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = if (request.isForMainFrame) route(request.url.toString(), request.hasGesture()) else false
-                override fun onPageStarted(view: WebView, nextUrl: String?, favicon: Bitmap?) { stop("navigate"); pageReady = false; domEligible = false; domPageId = 0; resolveJob?.cancel(); pageGeneration++; article = null; articleId = null; stateLabel = ""; this@ReaderController.url = nextUrl ?: ""; history(view) }
+                override fun onPageStarted(view: WebView, nextUrl: String?, favicon: Bitmap?) { if (view !== webView) return; stop("navigate"); pageReady = false; domEligible = false; domPageId = 0; resolveJob?.cancel(); pageGeneration++; article = null; articleDevice = null; articleId = null; stateLabel = ""; this@ReaderController.url = nextUrl ?: ""; history(view) }
                 override fun onPageFinished(view: WebView, nextUrl: String?) {
+                    if (view !== webView) return
                     this@ReaderController.url = nextUrl ?: ""; history(view)
                     if (UrlPolicy.classify(this@ReaderController.url) != UrlPolicy.Destination.READER) { stop("navigate"); view.stopLoading(); return }
                     pageReady = true
                     val generation = pageGeneration
                     view.evaluateJavascript("JSON.stringify({id:window.mw?.config?.get('wgArticleId')||0,ns:window.mw?.config?.get('wgNamespaceNumber'),title:window.mw?.config?.get('wgTitle')||document.title,disambiguation:!!document.querySelector('.disambig, #disambigbox')})") { raw ->
                         val metadata = runCatching { JSONObject(JSONTokener(raw).nextValue() as String) }.getOrNull() ?: return@evaluateJavascript
-                        if (generation != pageGeneration || metadata.optInt("ns", -1) != 0 || metadata.optBoolean("disambiguation") || !UrlPolicy.measurable(this@ReaderController.url)) return@evaluateJavascript
+                        if (view !== webView || generation != pageGeneration || metadata.optInt("ns", -1) != 0 || metadata.optBoolean("disambiguation") || !UrlPolicy.measurable(this@ReaderController.url)) return@evaluateJavascript
                         domEligible = true; domPageId = metadata.optLong("id")
                         if (this@ReaderController.settings.localConsent) store.remember(this@ReaderController.settings.device()?.userId ?: "guest", "viewed", HistoryEntry(UrlPolicy.wiki(this@ReaderController.url)!!, "", metadata.getString("title"), metadata.optLong("id").takeIf { it > 0 }, this@ReaderController.url))
                         resolveJob = scope.launch {
-                            if (!this@ReaderController.settings.cloudConsent || !this@ReaderController.settings.serverEnabled || this@ReaderController.settings.device() == null) return@launch
+                            if (!active() || this@ReaderController.settings.paused || !this@ReaderController.settings.cloudConsent || !this@ReaderController.settings.serverEnabled || this@ReaderController.settings.device() == null) return@launch
                             val device = this@ReaderController.settings.device() ?: return@launch
                             val frameUrl = this@ReaderController.url
-                            article = try { Api(this@ReaderController.settings).resolveArticle(store, frameUrl, device) }
+                            val resolved = try { Api(this@ReaderController.settings).resolveArticle(store, frameUrl, device) }
                             catch (cancelled: CancellationException) { throw cancelled }
                             catch (_: Exception) { null }
-                            if (generation != pageGeneration) return@launch
+                            if (generation != pageGeneration || this@ReaderController.settings.device() != device || !active() || this@ReaderController.settings.paused) return@launch
+                            article = resolved; articleDevice = device
                             articleId = article?.optString("article_id")
                             refreshState()
                             if (article?.optBoolean("trackable") == false) { status = "このページは読書計測の対象外です"; return@launch }
@@ -359,7 +365,7 @@ internal class ReaderController(
                 }
                 override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) { history(view) }
                 override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: android.net.http.SslError) { handler.cancel(); status = "安全な接続を確認できませんでした" }
-                override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean { stop("pause"); crashed = true; view.destroy(); webView = null; changed(); return true }
+                override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean { stop("pause"); resolveJob?.cancel(); deletionResumeJob?.cancel(); pageGeneration++; pageReady = false; domEligible = false; crashed = true; view.destroy(); webView = null; changed(); return true }
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, result: android.os.Message): Boolean {
@@ -377,19 +383,22 @@ internal class ReaderController(
     private fun history(view: WebView) { canBack = view.canGoBack(); canForward = view.canGoForward(); changed() }
     private fun refreshState() {
         val id = articleId ?: return
-        val owner = settings.device()?.userId ?: return
+        val device = settings.device() ?: return
         val generation = pageGeneration
         scope.launch {
-            val record = runCatching { Api(settings).request("/me/articles/$id") }.getOrNull() ?: return@launch
-            if (generation != pageGeneration || settings.device()?.userId != owner) return@launch
+            val record = try { Api(settings).request("/me/articles/$id", device = device) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { return@launch }
+            if (generation != pageGeneration || settings.device() != device || articleId != id) return@launch
             val state = when (record.getString("effective_state")) { "completed" -> "読了"; "partial" -> "途中まで読んだ"; else -> "閲覧" }
             val evidence = if (record.optString("evidence") == "self_reported") "自己申告" else "推定"
             stateLabel = "$state ($evidence)"
         }
     }
     fun activeChanged(force: Boolean? = null) {
-        if (!settings.cloudConsent || !settings.serverEnabled || settings.device() == null) resolveJob?.cancel()
-        if (contextStarted && (settings.device()?.deviceId != sessionDevice?.deviceId || settings.epoch != sessionEpoch)) { stop("logout"); stateLabel = "" }
+        if (!(force ?: active()) || settings.paused || !settings.cloudConsent || !settings.serverEnabled || settings.device() == null) resolveJob?.cancel()
+        if (articleDevice != null && articleDevice != settings.device()) { resolveJob?.cancel(); article = null; articleId = null; articleDevice = null; stateLabel = "" }
+        if (contextStarted && (settings.device() != sessionDevice || settings.epoch != sessionEpoch)) { stop("logout"); stateLabel = "" }
         val cutoff = settings.deletionCutoff(articleId)
         if (contextStarted && cutoff != null && sessionStartedAt <= cutoff) { stop("pause"); stateLabel = "" }
         if (cutoff != null && System.currentTimeMillis() <= cutoff) {
@@ -408,9 +417,9 @@ internal class ReaderController(
                 val resolved = try { Api(settings).resolveArticle(store, frameUrl, device) }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { return@launch }
-                if (generation != pageGeneration || settings.device() != device) return@launch
+                if (generation != pageGeneration || settings.device() != device || !active() || settings.paused) return@launch
                 stop("document_changed")
-                article = resolved; articleId = resolved.optString("article_id")
+                article = resolved; articleDevice = device; articleId = resolved.optString("article_id")
                 refreshState()
                 if (resolved.optBoolean("trackable")) start(domPageId)
                 else status = "このページは読書計測の対象外です"
@@ -440,5 +449,5 @@ internal class ReaderController(
         status = ""
     }
     fun stop(reason: String) { webView?.evaluateJavascript("window.WKMF_NATIVE?.stop(${JSONObject.quote(reason)})", null); contextStarted = false; hostActive = false }
-    fun destroy() { stop("pause"); resolveJob?.cancel(); deletionResumeJob?.cancel(); webView?.destroy(); webView = null }
+    fun destroy() { stop("pause"); pageGeneration++; pageReady = false; domEligible = false; resolveJob?.cancel(); deletionResumeJob?.cancel(); webView?.destroy(); webView = null }
 }
