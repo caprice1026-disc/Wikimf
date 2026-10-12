@@ -95,3 +95,12 @@ Windows PowerShell 5.1 の初期設定・上書き拒否・公開IPv4拒否も�
 残る受入条件は PC Docker engine の正常化、実 Wi-Fi 疎通、Android 実機の直接インストールと同期確認である。実 OAuth / 本番 HTTPS は今回の合格範囲から分ける。Docker/WSL/Hyper-V/security 設定の実変更、本番鍵変更、実機ADB、ルーター操作、main merge は行っていない。最終の文書 commit は検証済み source を変更しないため CI を再実行しない。
 
 更新記録: 2026-10-12、成功した同一実装commitの全CI結果とAPK入手リンク、署名/hash、PowerShell実行結果と残る実機/PC条件を確定した。
+
+
+## PC 復旧後の追加検証（2026-10-12 10:31 UTC）
+
+ユーザーの明示承認で LAN 専用 TCP8080 / Private / local192.168.11.10 / remote192.168.11.0/24 の firewall 規則を作成し、Docker 更新後も scope 一致を確認した。ユーザーの手動更新で Desktop4.94.0 / Engine29.8.2 / Compose5.5.1 が正常化した。以前の PC 起動失敗と規則作成待ちの記録は初回時点の状況であり、この後続検証で解消した。
+
+wikimf-lan の3サービスを起動し、実 private-IP の入口で health/config/Dashboard 直接ルートと assets、単回ログイン、CSRF、通常の端末コード承認と単回 exchange、記録 OFF 維持を確認した。DB5432/API8000 の実 HostPort 割当はなく、公開は192.168.11.10:8080のみ。PostgreSQL の分離スキーマで LAN14件（同期・再送・duplicate・記録停止）が通過した。検証用端末は失効済み、実ユーザー同意は OFF、stack はユーザーの実機確認に備えて起動を維持した。
+
+実 Android のインストール・同 Wi-Fi 同期、実 OAuth、本番 HTTPS は未実施。ユーザー端末の ADB、ルーター、main merge は操作していない。後続変更は手順・証跡・本計画のみであり、検証済み実装と CI APK を変更していない。

@@ -27,7 +27,7 @@ Init はランダム秘密情報を `.env.lan` に作り、既存ファイルは
 
 PC で `http://192.168.11.10:8080/health` を開き `status: ok`、`http://192.168.11.10:8080/app` で Dashboard が表示されることを確認します。Android のブラウザーで同じ `/health` が表示されることも確認します。
 
-ファイアウォールの実変更は本作業では行っていません。レジストリの保存済み規則に 8080 を明示したものは 0 件でしたが、全ポート・ポート範囲・グループポリシーを含む有効な規則の判定は未完了です。この PC は全 profile の firewall が有効ですが、既存規則全体は権限不足で確認できていません。必要な場合の最小候補は **受信 TCP 8080、Private profile、ローカルアドレス 192.168.11.10、接続元 192.168.11.0/24** です。Public/全ポート/全接続元の許可は行いません。実際の追加は確認後に行います。AP のクライアント分離やゲスト Wi-Fi でも端末間通信が止まる場合があります。
+2026-10-12、ユーザーの明示承認で専用 firewall 規則を作成しました。**受信 TCP 8080、Private profile、ローカルアドレス 192.168.11.10、接続元 192.168.11.0/24、EdgeTraversal Block** の範囲です。Docker 更新後も有効・許可・同じ範囲であることを netsh で再確認しました。他の規則や profile は変更していません。PC の IP が変わった場合は設定と規則の再確認が必要です。AP のクライアント分離やゲスト Wi-Fi では端末間通信が止まる場合があります。
 
 ## 検証ユーザーと端末連携
 
@@ -91,4 +91,6 @@ Down は専用 DB volume を残します。再起動は Up、再ログインは 
 
 [LAN stack の実起動証拠](https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11723764052)と[Android の回帰結果](https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11724548282)も保存しました。Windows PowerShell 5.1 では初期設定の4キー・上書き拒否・公開IPv4拒否を隔離ディレクトリで確認しました。
 
-この PC の Docker Desktop は通常の起動を試しましたが `Bad response from Docker engine` と内部 ping の EOF が続き、PC 上の Compose 実起動は確認できていません。OS/WSL/Hyper-V 設定や firewall の変更は行っていません。Docker engine の正常化後に Up を実行し、必要なら最小の firewall 規則の確認を行ってください。実 Android でのインストールと同じ Wi-Fi の同期はユーザー受入確認として残ります。main は `1d3f7db` のまま、merge は行っていません。
+2026-10-12 の後続確認では、ユーザーが Docker Desktop を **4.94.0.241994** に手動更新し、Engine **29.8.2** / Compose **5.5.1** の正常応答を確認しました。`wikimf-lan` の3サービスは起動済みです。`http://192.168.11.10:8080/health`、Dashboard の直接ルート・assets・API 設定が成功しました。実際のポート公開は `192.168.11.10:8080` の1つだけで、DB 5432 と API 8000 のホストへの割当はありません。単回ログイン、CSRF、通常のコード承認・端末交換、記録 OFF の維持を PC の入口経由で確認し、PostgreSQL の分離テストスキーマで LAN 回帰14件（同期・再送・二重計上防止・記録停止）が通過しました。検証用の一時端末は失効済みで、専用ユーザーの記録同意は OFF のままです。
+
+PC の stack は実機確認用に起動を維持しています。上記 `Login` を実行し、Android のブラウザーから `/health` と検証ログインを確認してください。Android 実機での直接インストール・同じ Wi-Fi を通した同期は、ユーザー側の確認として残ります。実 OAuth / 本番 HTTPS は別の確認です。main は merge していません。

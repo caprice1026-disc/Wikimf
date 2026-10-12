@@ -36,18 +36,48 @@
     ]
   },
   "docker_local": {
-    "status": "blocked",
-    "client": "23.0.5",
-    "compose": "2.17.3",
-    "desktop_launch": "attempted",
-    "error": "Bad response from Docker engine; VMDockerdAPI /ping EOF",
-    "os_or_wsl_settings_changed": false
+    "status": "passed",
+    "desktop": "4.94.0.241994",
+    "client": "29.8.2",
+    "server": "29.8.2",
+    "compose": "5.5.1",
+    "observed_at": "2026-10-12T10:31:19.798630+00:00",
+    "origin": "http://192.168.11.10:8080",
+    "desktop_update": "performed manually by user after explicit current-license consent",
+    "windows_docker_api": "normal Server JSON response",
+    "services": "db/backend healthy; gateway running",
+    "actual_port_bindings": {
+      "db": {
+        "5432/tcp": null
+      },
+      "backend": {
+        "8000/tcp": null
+      },
+      "gateway": {
+        "8080/tcp": [
+          {
+            "HostIp": "192.168.11.10",
+            "HostPort": "8080"
+          }
+        ]
+      }
+    },
+    "health_config_dashboard_routes_assets": "passed",
+    "one_use_login_csrf_pair_exchange_recording_off": "passed",
+    "temporary_test_device": "revoked; real LAN test user recording consent remains OFF",
+    "postgres_lan_tests": {
+      "passed": 14,
+      "retry_duplicate_recording_stop": "passed",
+      "database_scope": "isolated test schemas; actual LAN user consent stays OFF"
+    },
+    "os_or_wsl_settings_changed_by_agent": false,
+    "stack_left_running_for_user": true
   },
   "network": {
     "wifi_profile": "Private",
     "pc_ipv4": "192.168.11.10/24",
-    "firewall_change": false,
-    "firewall_rules_full_read": "permission unavailable",
+    "firewall_change": true,
+    "firewall_rules_full_read": "netsh read-only inventory; dedicated rule scope confirmed",
     "proposed_rule": {
       "protocol": "TCP",
       "port": 8080,
@@ -56,7 +86,9 @@
       "remote_range": "192.168.11.0/24"
     },
     "registry_explicit_8080_rules_found": 0,
-    "effective_rule_inventory": "CIM ActiveStore query permission unavailable; broad/group-policy rules not fully determined"
+    "effective_rule_inventory": "Dedicated inbound Allow rule enabled: TCP8080, Private, local192.168.11.10, remote192.168.11.0/24, EdgeTraversalBlock; no unrelated rule changes by agent",
+    "firewall_rule": "Wikimf-LAN-8080-Private-192.168.11.0-24",
+    "firewall_rule_verification": "Created and verified after explicit user consent; netsh rechecked exact scope after Docker update"
   },
   "ci": {
     "status": "success",
@@ -120,8 +152,7 @@
     "pc_path": "C:/Users/81905/Downloads/div/Wikimf/.tmp/artifacts/wikimf-lan-ci-5f69887.apk"
   },
   "followup_required": [
-    "Restore PC Docker engine health before scripts/lan.ps1 Up",
-    "Confirm effective firewall policy and approve any rule change",
-    "Install LAN APK directly and run real-device Wi-Fi sync acceptance"
+    "Install LAN APK directly and run real-device Wi-Fi sync acceptance",
+    "Opt in to recording in dedicated test user Dashboard and Android after reviewing consent"
   ]
 }
