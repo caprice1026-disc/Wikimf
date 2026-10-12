@@ -37,8 +37,8 @@ android {
         applicationId = "org.wikimf.reader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.1.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "DEFAULT_API_URL", "\"https://wikimf.example/api/v1\"")
         buildConfigField("boolean", "ALLOW_LAN_HTTP", "false")

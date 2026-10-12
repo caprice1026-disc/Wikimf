@@ -65,6 +65,8 @@ await page.route('**/api/v1/**', async route => {
     const item = records.find(item => path.includes(item.article_id));
     item.manual_state = method === 'PUT' ? request.postDataJSON().state : null;
     item.effective_state = item.manual_state || item.inferred_state;
+    activities = activities.map(a => a.article_id === item.article_id ? {...a, article_state:item.effective_state, article_manual_state:item.manual_state, article_evidence:item.manual_state?'self_reported':'inferred'} : a);
+    item.activities = activities.filter(a => a.article_id === item.article_id);
     body = item;
   }
   else if (path.match(/^\/me\/articles\/[^/]+\/history$/)) { records = records.filter(item => !path.includes(item.article_id)); activities = activities.filter(item => !path.includes(item.article_id)); body = { deleted: true, recording_epoch: 1 }; }
@@ -133,9 +135,15 @@ try {
   await page.getByRole('link', { name: article.title }).click();
   await page.getByRole('radio', { name: '✓ 読了' }).check();
   await page.getByRole('button', { name: '手動設定を保存' }).click();
-  await page.getByText('手動設定', { exact: true }).waitFor();
+  await page.getByText('手動設定', { exact: true }).first().waitFor();
   assert.equal(records[0].manual_state, 'completed');
   assert.equal(records[0].active_ms, 480000);
+  await page.goto(`${base}/app`);
+  const manualRow = page.locator('.reading-row').filter({has:page.getByRole('link',{name:article.title})});
+  await manualRow.locator('.status-chip.completed').waitFor();
+  assert.equal(await manualRow.locator('.manual-state-label').textContent(),'手動設定');
+  assert.ok((await manualRow.locator('.session-state-label').textContent()).includes('途中まで'));
+  await page.getByRole('link',{name:article.title}).click();
   await page.getByRole('button', { name: '自動推定に戻す' }).click();
   await page.getByText('自動推定', { exact: true }).first().waitFor();
   assert.equal(records[0].manual_state, null);

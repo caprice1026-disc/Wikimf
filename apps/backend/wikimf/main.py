@@ -110,7 +110,7 @@ def create_app(database_url=None, mediawiki=None):
             db.execute(text("SELECT 1"))
         except Exception:
             raise APIError("database_unavailable",503,True) from None
-        return {"status":"ok","schema_version":1,"measurement_policy_version":"reading-v1"}
+        return {"status":"ok","schema_version":1,"measurement_policy_version":"reading-v2"}
 
     @app.get(PREFIX+"/config")
     def public_config():

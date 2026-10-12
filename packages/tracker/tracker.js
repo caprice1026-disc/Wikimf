@@ -1,6 +1,6 @@
 // One source for the isolated Chrome world and Android's origin-restricted bridge.
-export const POLICY = Object.freeze({ extractor: 'prose-v1', measurement: 'reading-v1', chunkChars: 200,
-  visibleRatio: 0.5, coverMs: 2000, idleMs: 60000, maxTickMs: 2000, saveMs: 10000 });
+export const POLICY = Object.freeze({ extractor: 'prose-v1', measurement: 'reading-v2', chunkChars: 200,
+  visibleRatio: 0.5, coverMs: 1800, sampleMs: 200, idleMs: 60000, maxTickMs: 2000, saveMs: 10000 });
 export const WIKIS = Object.freeze({ 'ja.wikipedia.org': 'jawiki', 'en.wikipedia.org': 'enwiki' });
 export function articleLocation(value) {
   let url;
@@ -111,9 +111,8 @@ export function viewportChunks(chunks, height) {
   return chunks.slice(Math.max(0,start-1),Math.min(chunks.length,end+1));
 }
 export function inferState(activeMs, textChars, coveredChars, wiki, status = 'ok') {
-  const rate = wiki === 'enwiki' ? 1000 : 600;
   if (status === 'ok' && textChars > 0) {
-    if (coveredChars * 5 >= textChars * 4 && activeMs >= Math.max(30000, 48000 * textChars / rate)) return 'completed';
+    if (coveredChars * 5 >= textChars * 4 && activeMs >= 30000) return 'completed';
     if (activeMs >= 30000 && coveredChars >= Math.min(200, textChars)) return 'partial';
   }
   return activeMs >= 10000 ? 'viewed' : null;
@@ -208,13 +207,14 @@ export class DOMTracker {
       }
     }, { rootMargin: '200px' });
     for (const chunk of extracted.chunks) this.observer.observe(chunk.block);
-    this.timer = setInterval(() => this.tick(), 1000);
-    this.visibility = () => { this.tick(); if (this.doc.visibilityState !== 'visible' || !this.doc.hasFocus()) this.flush(); else this.session?.interact(performance.now()); };
+    this.tick(); // Seed visibility before the first sampling interval.
+    this.timer = setInterval(() => this.tick(), POLICY.sampleMs);
+    this.visibility = () => { this.tick(true); if (this.doc.visibilityState !== 'visible' || !this.doc.hasFocus()) this.flush(); else this.session?.interact(performance.now()); };
     this.doc.addEventListener('visibilitychange', this.visibility);
     this.doc.defaultView.addEventListener('blur', this.visibility);
     this.doc.defaultView.addEventListener('focus', this.visibility);
   }
-  tick() {
+  tick(boundary = false) {
     if (!this.session) return;
     const win = this.doc.defaultView, mono = performance.now(), now = Date.now();
     const delta = mono - this.session.lastMono, wallDelta = now - this.session.lastWall;
@@ -223,16 +223,14 @@ export class DOMTracker {
       this.stop('clock_changed'); this.host.restart?.(); return;
     }
     this.flushBeforeIntervalLimit(now);
-    const active = this.enabled && this.doc.visibilityState === 'visible' && this.doc.hasFocus() && this.host.active();
+    const active = boundary ? this.enabled && this.wasActive : this.enabled && this.doc.visibilityState === 'visible' && this.doc.hasFocus() && this.host.active();
     if (active && !this.wasActive && now >= this.session.lastWall) {
       this.session.lastWall = now; this.session.lastMono = mono; this.session.interact(mono);
     }
     this.wasActive = active;
-    const ratios = Array(this.extracted.chunks.length).fill(0);
-    if (active) for (const block of this.candidates) {
-      for (const chunk of viewportChunks(this.byBlock.get(block) || [], win.innerHeight))
-        ratios[chunk.id] = visibleRatio(chunk.range.getClientRects(), win.innerWidth, win.innerHeight);
-    }
+    const ratios = boundary ? this.session.lastRatios : Array(this.extracted.chunks.length).fill(0);
+    if (active && !boundary) for (const chunk of viewportChunks(this.extracted.chunks, win.innerHeight))
+      ratios[chunk.id] = visibleRatio(chunk.range.getClientRects(), win.innerWidth, win.innerHeight);
     this.session.tick({ now, mono, active, ratios,
       scrollRatio: win.scrollY / Math.max(1, this.doc.documentElement.scrollHeight - win.innerHeight) });
     if (this.session.clockChanged) { this.stop('clock_changed'); this.host.restart?.(); return; }
@@ -247,6 +245,8 @@ export class DOMTracker {
   }
   flush() { const event = this.session?.event('reading.observed'); if (event) return this.host.persist(event); }
   stop(reason = 'pause') {
+    // Only sample a same-document control boundary, never a replacement body.
+    if (this.session && ['pause', 'logout'].includes(reason)) this.tick();
     this.generation = (this.generation || 0) + 1;
     clearInterval(this.timer); this.observer?.disconnect(); this.candidates.clear();
     if (this.interaction) for (const name of ['scroll', 'wheel', 'pointerdown', 'touchstart', 'keydown']) this.doc.removeEventListener(name, this.interaction);

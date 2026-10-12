@@ -883,7 +883,7 @@ fingerprintは本文変化の検知用であり、Wikipedia公式本文の真正
 
 ### 12.4 カバー率
 
-chunkのRange矩形とviewportの交差から可視割合を計算し、**アクティブ時間中に50%以上が累計2秒以上表示**されたchunkをcoveredにする案。
+chunkのRange矩形とviewportの交差から可視割合を計算し、**アクティブ時間中に50%以上が累計1.8秒以上表示**されたchunkをcoveredにする案。
 
 ```text
 covered_chars = coveredになったchunkの文字数の合計
@@ -912,7 +912,7 @@ Host Adapterが計測可能と判定
 
 初期idle上限は60秒。scroll、wheel、pointerdown、touch、keydown等を操作として扱うが、キーの中身、入力文字、フォームの値は記録しない。pointermoveだけで延々と延長しない。初回の表示・focusに60秒の猶予を与える案。
 
-1秒程度のtickで単調時計の差分を評価し、2秒を超える大きなgapはsleepや処理停止として加算せず、基準を更新する。hidden、blur、検索画面、Account、外部ブラウザ、画面ロックで直ちに停止する。
+200ms程度のtickで単調時計の差分を評価し、2秒を超える大きなgapはsleepや処理停止として加算せず、基準を更新する。hidden、blur、検索画面、Account、外部ブラウザ、画面ロックで直ちに停止する。
 
 60秒idleは調整値であり、長く静かに読む人を過小評価する。読書速度・身体操作・端末状態の違いを正確に判定する仕組みだとは説明しない。
 
@@ -947,10 +947,10 @@ session_estimated_chars =
 
 | 言語 | 初期の上限係数 |
 |---|---:|
-| 日本語 | 600 code points / 分 |
+| 日本語 | 1,800 code points / 分 |
 | 英語 | 1,000 code points / 分 |
 
-日本語600は添付案を引き継ぐ仮説、英語1,000は本書の追加提案。**人間の標準読書速度の研究値ではない。** 英語について同じ600を使うかも含め、実利用のfixtureで調整する。
+2026-10-12の承認により、日本語の時間上限を600から1,800へ変更した。英語は1,000を維持する。これは製品上の上限係数であり、理解度や人間の読速の科学的限界を表す値ではない。表示本文DOMのcovered文字数との小さい方を推定値として使う。
 
 この式は時間による上限であり、実際に読まれた各文字を確定する式ではない。「ある場所で長く滞在してから他を流し見る」といった挙動も完全には防げない。最初から不正検知を機械学習化せず、個人の記録として使う。
 
@@ -972,13 +972,13 @@ completed   読了
 
 「読了」の補助説明には「自動推定」または「自分で設定」を表示できるようにする。読了という短いラベルを使っても、機械が理解度を確認したと誤認させない。
 
-### 13.2 自動判定v1 [すべて調整可能な設計案]
+### 13.2 自動判定v2 [2026-10-12承認]
 
-Nを本文文字数、Cをcovered文字数、Tをサーバーが計上したアクティブ秒、Rを言語別の文字数/分の上限係数とする。
+Nを本文文字数、Cをcovered文字数、Tをサーバーが計上したアクティブ秒とする。言語別の文字数/分は推定文字数にのみ使い、読了の必要時間には使わない。
 
 | 優先順 | 状態 | 条件 |
 |---|---|---|
-| 1 | 読了 | 本文抽出成功、N>0、C/N≥0.8、T≥max(30, 60×0.8×N/R) |
+| 1 | 読了 | 本文抽出成功、N>0、C/N≥0.8、T≥30 |
 | 2 | 途中まで読んだ | 読了条件未達、本文抽出成功、T≥30、C≥min(200,N) |
 | 3 | 閲覧 | T≥10 |
 | それ以外 | 履歴の読書実績に未登録 | 起動中の一時状態や短時間離脱 |
@@ -992,11 +992,7 @@ partialに本文全体の一定割合を強制しないのは、非常に長い�
 def infer_state(active_seconds, text_chars, covered_chars, rate, measurement_ok):
     if measurement_ok and text_chars > 0:
         coverage = covered_chars / text_chars
-        minimum_completed_seconds = max(
-            30,
-            60 * 0.8 * text_chars / rate,
-        )
-        if coverage >= 0.8 and active_seconds >= minimum_completed_seconds:
+        if coverage >= 0.8 and active_seconds >= 30:
             return "completed"
         if active_seconds >= 30 and covered_chars >= min(200, text_chars):
             return "partial"
@@ -1006,7 +1002,7 @@ def infer_state(active_seconds, text_chars, covered_chars, rate, measurement_ok)
     return None
 ```
 
-例として日本語本文3,000文字なら、2,400文字以上のcoverと4分以上で読了。300文字なら、240文字以上のcoverと30秒以上になる。これは上記の仮ルールによる計算例であり、実測による正しさを主張しない。
+日本語本文3,000文字なら2,400文字以上、300文字なら240文字以上のcoverと30秒以上のアクティブ時間で読了となる。本文を高速に通過しただけでは1.8秒の表示証拠を満たさない。理解度を保証する判定ではない。旧reading-v1（2秒）のrawイベントも保持したまま、同じ受領時間とcoverageをreading-v2で再評価する。以前のデータに未計測のcoverageや時間を追加しない。手動状態を優先する。推定文字数は新上限で再計算されるため、日本語の過去表示値が増える場合があるが、実測時間は変わらない。
 
 ### 13.3 session状態と記事状態
 

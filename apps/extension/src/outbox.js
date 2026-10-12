@@ -117,7 +117,7 @@ export function validateObservation(event) {
   const integer = (value, max = 1e12) => Number.isSafeInteger(value) && value >= 0 && value <= max;
   if (!['event_id','device_id','session_id','article_id'].every(key => uuid(event[key])) || !integer(event.seq) || !integer(event.page_id) || event.page_id === 0 || !integer(event.recording_epoch)) return false;
   if (!['session.opened','reading.observed','session.closed'].includes(event.type) || !['jawiki','enwiki'].includes(event.wiki)) return false;
-  if (typeof event.client_version !== 'string' || event.client_version.length > 32 || event.measurement_policy_version !== 'reading-v1') return false;
+  if (typeof event.client_version !== 'string' || event.client_version.length > 32 || !['reading-v1', 'reading-v2'].includes(event.measurement_policy_version)) return false;
   if (event.reason && !['navigate','reload','pause','logout','document_changed','clock_changed'].includes(event.reason)) return false;
   if (![event.occurred_at,event.session_started_at,event.interval?.start_at,event.interval?.end_at].every(value => typeof value === 'string' && value.length <= 32 && Number.isFinite(Date.parse(value)))) return false;
   const interval = event.interval, document = event.document, progress = event.progress;

@@ -77,7 +77,7 @@ class ReadingEventInput(StrictModel):
     document: Document
     progress: Progress
     client_version: str = Field(min_length=1, max_length=40)
-    measurement_policy_version: Literal["reading-v1"]
+    measurement_policy_version: Literal["reading-v1", "reading-v2"]
     reason: Literal["navigate", "reload", "pause", "logout", "document_changed", "clock_changed", "process_lost", "extractor_changed"] | None = None
 
     @field_validator("schema_version", mode="before")

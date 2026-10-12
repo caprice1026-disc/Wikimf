@@ -261,7 +261,10 @@
       "type": "string"
     },
     "measurement_policy_version": {
-      "const": "reading-v1",
+      "enum": [
+        "reading-v1",
+        "reading-v2"
+      ],
       "title": "Measurement Policy Version",
       "type": "string"
     },

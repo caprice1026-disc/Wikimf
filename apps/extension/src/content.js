@@ -13,12 +13,13 @@
     }, restart: () => { void start(); } };
   function cancel(reason = 'pause', stop = true) {
     const requestId = generation++;
-    leaseUntil = 0; starting = null;
+    starting = null;
     // Cancel the matching document attempt only; a late cancel cannot revoke a newer start.
     void send({ type: 'article.cancel', request_id: requestId }).catch(() => {});
-    if (!stop) return;
+    if (!stop) { leaseUntil = 0; return; }
     const previous = tracker; tracker = null;
-    return previous?.stop(reason);
+    const stopped = previous?.stop(reason); leaseUntil = 0;
+    return stopped;
   }
   async function start() {
     if (starting || !visible()) return starting;

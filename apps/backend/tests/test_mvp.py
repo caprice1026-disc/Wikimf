@@ -42,8 +42,8 @@ def test_interval_union_and_state_boundaries():
     assert infer(doc,{0},9999,"jawiki") is None
     assert infer(doc,{0},10000,"jawiki") == "viewed"
     assert infer(doc,{0},30000,"jawiki") == "partial"
-    assert infer(doc,{0,1,2,3},79999,"jawiki") == "partial"
-    assert infer(doc,{0,1,2,3},80000,"jawiki") == "completed"
+    assert infer(doc,{0,1,2,3},29999,"jawiki") == "viewed"
+    assert infer(doc,{0,1,2,3},30000,"jawiki") == "completed"
     assert infer({"text_chars":None,"chunk_chars":[]},set(),100000,"enwiki") == "viewed"
 
 
@@ -242,11 +242,11 @@ def test_reread_char_increment_day_split(env):
     send(client,ids,observation(ids,start=start+timedelta(days=1),seconds=50,chunks=(0,1,2)))
     send(client,ids,observation(ids,start=start+timedelta(days=2),seconds=40,chunks=(0,1,2)))
     summary = client.get("/api/v1/me/stats?timezone=Asia/Tokyo").json()
-    assert summary["activity"]["estimated_unique_read_chars"]==500
+    assert summary["activity"]["estimated_unique_read_chars"]==600
     assert summary["activity"]["activity_count"]==3
     assert summary["library"]["qualified_article_count"]==1
     assert sum(d["active_ms"] for d in summary["daily"])==summary["activity"]["active_ms"]
-    assert sum(d["estimated_unique_read_chars"] for d in summary["daily"])==500
+    assert sum(d["estimated_unique_read_chars"] for d in summary["daily"])==600
 
 
 @pytest.mark.parametrize("field,value", [("schema_version",True),("progress.max_scroll_ratio",True),("progress.max_scroll_ratio","0.5"),

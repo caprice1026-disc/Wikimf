@@ -13,6 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sdk', type=Path, default=Path(os.getenv('ANDROID_HOME', str(ROOT/'apps/android/.tooling/sdk'))))
+    parser.add_argument('--expected-certificate', help='Required stable signer SHA256 for distributable local builds')
+    parser.add_argument('--previous-apk', type=Path, help='Verify same-signature increasing-version update compatibility')
     args = parser.parse_args()
     tools = args.sdk/'build-tools/35.0.0'
     suffix = '.exe' if os.name == 'nt' else ''
@@ -33,7 +35,23 @@ def main():
     assert ':networkSecurityConfig' not in release_xml
     signer = subprocess.check_output([str(tools/('apksigner.bat' if os.name=='nt' else 'apksigner')), 'verify', '--verbose', '--print-certs', str(lan)], text=True)
     certificate = re.search(r'certificate SHA-256 digest: ([0-9a-f]+)', signer).group(1)
-    evidence = {'application_id':'org.wikimf.reader.lan', 'version':'0.1.1-lan', 'debuggable':False,
+    badging = subprocess.check_output([str(tools/('aapt2'+suffix)), 'dump', 'badging', str(lan)], text=True, encoding='utf-8')
+    version = re.search(r"versionName='([^']+)'", badging).group(1)
+    code = int(re.search(r"versionCode='(\d+)'", badging).group(1))
+    if args.expected_certificate:
+        assert certificate == args.expected_certificate.lower(), 'Stable signing certificate changed; do not distribute as an update'
+    compatibility = 'not_checked'
+    if args.previous_apk:
+        previous = subprocess.check_output([str(tools/('apksigner.bat' if os.name=='nt' else 'apksigner')), 'verify', '--print-certs', str(args.previous_apk)], text=True)
+        previous_cert = re.search(r'certificate SHA-256 digest: ([0-9a-f]+)', previous).group(1)
+        previous_badging = subprocess.check_output([str(tools/('aapt2'+suffix)), 'dump', 'badging', str(args.previous_apk)], text=True, encoding='utf-8')
+        assert re.search(r"package: name='([^']+)'", previous_badging).group(1)=='org.wikimf.reader.lan'
+        assert certificate == previous_cert, 'Previous APK signature differs; preserve installed app, never uninstall to bypass this'
+        assert code > int(re.search(r"versionCode='(\d+)'", previous_badging).group(1)), 'Update versionCode must increase'
+        compatibility = 'same_signature_increasing_version'
+    evidence = {'application_id':'org.wikimf.reader.lan', 'version':version, 'version_code':code, 'debuggable':False,
+                'distribution':'stable_local_validation' if args.expected_certificate else 'ci_or_local_test_only',
+                'update_compatibility':compatibility,
                 'lan_http':True, 'release_https_boundary':'passed', 'signature':'verified',
                 'apk_sha256':hashlib.sha256(lan.read_bytes()).hexdigest(), 'certificate_sha256':certificate}
     output = ROOT/'.tmp/lan-apk-manifest.json'

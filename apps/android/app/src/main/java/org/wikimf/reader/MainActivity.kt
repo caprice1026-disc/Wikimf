@@ -205,6 +205,10 @@ class MainActivity : ComponentActivity() {
     var pairingStatus by remember { mutableStateOf<String?>(null) }
     var stats by remember(device?.userId) { mutableStateOf<JSONObject?>(null) }
     var busy by remember { mutableStateOf(false) }
+    val syncRevision by SyncUiUpdates.changes.collectAsState()
+    val syncMessage = remember(syncRevision, device?.userId) { syncStatusMessage(settings.status) }
+    val queued = remember(syncRevision, device?.userId) { device?.let { store.count(it.userId) } ?: 0 }
+    val quarantined = remember(syncRevision, device?.userId) { device?.let { store.quarantined(it.userId) } ?: 0 }
     LaunchedEffect(device?.deviceId) {
         if (device != null) {
             stats = runCatching { Api(settings).request("/me/stats") }.getOrNull()
@@ -245,7 +249,8 @@ class MainActivity : ComponentActivity() {
                 item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("クラウド読書記録に同意", Modifier.weight(1f)); Switch(checked = cloudConsent, onCheckedChange = { cloudConsent = it; settings.cloudConsent = it; SyncEngine.schedule(context); changed() }) } }
                 item { Text("記事・時間・本文カバー率を非公開で同期します。Dashboardの収集許可も必要です。OFFの間は未送信を端末で保持し、再同意と収集許可後に同期します。不要な記録は再同意前に破棄できます。本文・入力語・Cookie・認証情報は計測イベントへ含めません。", style = MaterialTheme.typography.bodySmall) }
                 item { Row { Text("この端末で記録を一時停止", Modifier.weight(1f)); Switch(checked = paused, onCheckedChange = { paused = it; settings.paused = it; changed() }) } }
-                item { Text(settings.status + "\n未送信 ${store.count(device.userId)}件・隔離 ${store.quarantined(device.userId)}件") }
+                item { Text("同期状態: $syncMessage") }
+                item { Text("未送信 ${queued}件・隔離 ${quarantined}件") }
                 item { TextButton(onClick = { SyncEngine.schedule(context); changed() }) { Text("同期を再試行") } }
                 if (!cloudConsent || !settings.serverEnabled) item { TextButton(onClick = { store.discard(device.userId); changed() }) { Text("この端末の未送信記録を破棄") } }
                 item { TextButton(onClick = logout) { Text("ログアウト / 端末連携解除") } }

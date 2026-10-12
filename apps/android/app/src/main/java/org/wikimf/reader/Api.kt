@@ -183,11 +183,12 @@ class SyncEngine(private val context: Context) {
         val binding = settings.controlOrder.permit()
         val store = LocalStore(context)
         val api = Api(settings)
+        settings.status = "同期中"
         try {
             repeat(20) {
                 val control = api.recordingControl(store, device)
                 val markers = control.markers
-                if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件を端末で保持"; return@withContext true }
+                if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中"; return@withContext true }
                 val pendingBefore = store.pending(device)
                 val rows = store.rows(device)
                 val ready = mutableListOf<Pair<QueueRow, JSONObject>>()
@@ -216,14 +217,14 @@ class SyncEngine(private val context: Context) {
                     ready.add(row to event)
                 }
                 if (ready.isEmpty()) {
-                    settings.status = if (store.quarantined(device.userId) > 0) "隔離された記録 ${store.quarantined(device.userId)}件" else if (store.count(device.userId) > 0) "再送を待っています" else "同期済み"
+                    settings.status = if (store.quarantined(device.userId) > 0) "隔離された記録があります" else if (store.count(device.userId) > 0) "再送を待っています" else "前回の同期完了"
                     if (settings.cloudConsent && settings.serverEnabled && store.pending(device) in 1 until pendingBefore) return@repeat
                     return@withContext !settings.cloudConsent || !settings.serverEnabled || store.pending(device) == 0
                 }
-                if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件"; return@withContext true }
+                if (!settings.serverEnabled || !settings.cloudConsent) { settings.status = "クラウド記録停止中"; return@withContext true }
                 submit(api, store, device, ready, control)
-                settings.status = "未送信 ${store.count(device.userId)}件・隔離 ${store.quarantined(device.userId)}件"
                 val pendingAfter = store.pending(device)
+                settings.status = if (pendingAfter == 0) "前回の同期完了" else "再試行を待っています"
                 if (pendingAfter == 0) return@withContext true
                 if (pendingAfter >= pendingBefore) return@withContext false
             }
@@ -232,9 +233,9 @@ class SyncEngine(private val context: Context) {
             if (failure is kotlinx.coroutines.CancellationException) throw failure
             if (!settings.controlOrder.current(binding, recording = false) || settings.device() != device) return@withContext true
             if (failure is ApiFailure && failure.errorCode == "recording_control_superseded") return@withContext false
-            if (failure is ApiFailure && failure.errorCode == "recording_disabled") { settings.status = "クラウド記録停止中・未送信 ${store.count(device.userId)}件を端末で保持"; return@withContext true }
+            if (failure is ApiFailure && failure.errorCode == "recording_disabled") { settings.status = "クラウド記録停止中"; return@withContext true }
             if (failure is ApiFailure && failure.code in setOf(401, 403)) { settings.recordingLocked { if (settings.controlOrder.current(binding, recording = false) && settings.device() == device && failure.current(settings)) { settings.status = "端末連携を確認してください"; settings.serverEnabled = false } }; return@withContext true }
-            else settings.status = "同期保留・${store.count(device.userId)}件（再試行可能）"
+            else settings.status = syncFailureMessage(failure)
             store.rows(device).forEach { store.retry(it) }
             false
         } finally { store.close() }

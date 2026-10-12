@@ -9,7 +9,8 @@ from .articles import article_json
 from .db import Article, ManualState, ReadingEvent, ReadingInterval, ReadingSession, now, utc
 
 RANK = {None: 0, "viewed": 1, "partial": 2, "completed": 3}
-RATES = {"jawiki": 600, "enwiki": 1000}
+RATES = {"jawiki": 1800, "enwiki": 1000}
+JUDGEMENT_POLICY = "reading-v2"
 
 
 def stamp(value):
@@ -55,7 +56,7 @@ def infer(document, covered, active_ms, wiki):
     if n:
         c = sum(document["chunk_chars"][i] for i in covered)
         # Integer comparisons avoid rounding at 80% and time boundaries.
-        if c * 5 >= n * 4 and active_ms >= 30000 and active_ms * RATES[wiki] >= 60000 * n * 4 // 5:
+        if c * 5 >= n * 4 and active_ms >= 30000:
             return "completed"
         if active_ms >= 30000 and c >= min(200, n):
             return "partial"
@@ -125,7 +126,7 @@ def replay(db, user_id):
                 "state": state, "evidence": "inferred", "active_ms": active_ms, "estimated_read_chars": chars,
                 "coverage": sum(doc["chunk_chars"][i] for i in covered)/doc["text_chars"] if doc["text_chars"] else None,
                 "measurement_status": "ok" if doc["text_chars"] else "time_only", "pending_sync": expected > raw_time,
-                "quarantined": False, "judgement_policy_version": s.policy_version}
+                "quarantined": False, "judgement_policy_version": JUDGEMENT_POLICY}
         if state:
             activities.append(item)
         elapsed, seen = 0, set()
@@ -173,6 +174,13 @@ def replay(db, user_id):
         record.setdefault("manual_state", None)
         record["effective_state"] = record["manual_state"] or record["inferred_state"]
         record["evidence"] = "self_reported" if record["manual_state"] else "inferred"
+    # Keep the session's inference immutable in meaning while exposing the
+    # article's current state, including manual overrides, in every list.
+    for activity in activities:
+        record = records[activity["article_id"]]
+        activity["article_state"] = record["effective_state"]
+        activity["article_manual_state"] = record["manual_state"]
+        activity["article_evidence"] = record["evidence"]
     return {"records": list(records.values()), "activities": activities, "spans": spans, "increments": char_increments,
             "quarantined_sessions": [key for key in sessions if key not in valid]}
 

@@ -90,10 +90,10 @@ jobs:
       - run: gradle testDebugUnitTest testLanUnitTest testReleaseUnitTest assembleDebug assembleLan assembleRelease lintDebug lintLan lintRelease --no-daemon
       - name: Verify LAN APK and release network boundary
         run: python ../../scripts/verify_android_lan.py --sdk "$ANDROID_HOME"
-      - name: Upload LAN verification APK
+      - name: Upload CI-only LAN test APK (ephemeral signer)
         uses: actions/upload-artifact@v4
         with:
-          name: wikimf-lan-apk
+          name: wikimf-lan-ci-test-apk
           include-hidden-files: true
           path: |
             apps/android/app/build/outputs/apk/lan/app-lan.apk
@@ -113,7 +113,7 @@ jobs:
           target: google_apis
           working-directory: apps/android
           disable-animations: true
-          script: gradle connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.wikimf.reader.ApiTransportRegressionTest,org.wikimf.reader.ReaderLifecycleRegressionTest,org.wikimf.reader.PrivacyRegressionTest,org.wikimf.reader.RecordingControlRegressionTest --no-daemon
+          script: gradle connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=org.wikimf.reader.ApiTransportRegressionTest,org.wikimf.reader.ReaderLifecycleRegressionTest,org.wikimf.reader.PrivacyRegressionTest,org.wikimf.reader.RecordingControlRegressionTest,org.wikimf.reader.SyncUiRegressionTest,org.wikimf.reader.SyncRetryRegressionTest,org.wikimf.reader.ReadingMeasurementRegressionTest --no-daemon
       - name: Upload Android regression results
         if: always()
         uses: actions/upload-artifact@v4

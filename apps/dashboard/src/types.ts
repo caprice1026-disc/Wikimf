@@ -14,6 +14,8 @@ export type ReadingRecord = {
 export type Activity = {
   article: Article; article_id: string; session_id: string; session_started_at: string;
   state: ReadingState; active_ms: number; estimated_read_chars: number; source: Source;
+  article_state?: ReadingState; article_manual_state?: ReadingState | null;
+  article_evidence?: 'inferred' | 'self_reported';
   evidence?: string; coverage?: number | null; judgement_policy_version?: string;
   measurement_status?: string; pending_sync: boolean; quarantined: boolean;
 };

@@ -9,11 +9,16 @@
   const changed = () => { if (!stopped) { bridge.stop('document_changed'); send({ kind: 'document_changed' }); } };
   const bridge = { sessionId: context.sessionId,
     setActive(value) {
+      if (active && !value) tracker?.tick();
       active = !!value;
       if (active) tracker?.session?.interact(performance.now());
       tracker?.tick(); if (!active) tracker?.flush();
     },
-    stop(reason = 'pause') { stopped = true; active = false; clearTimeout(mutationTimer); bodyObserver?.disconnect(); return tracker?.stop(reason); } };
+    stop(reason = 'pause') {
+      if (reason === 'navigate') tracker?.tick();
+      const result = tracker?.stop(reason);
+      stopped = true; active = false; clearTimeout(mutationTimer); bodyObserver?.disconnect(); return result;
+    } };
   window.WKMF_NATIVE = bridge;
   tracker = new WikiMfTracker.DOMTracker({ doc: document, host: { active: () => active && !stopped && !!WikiMfTracker.articleLocation(location.href), persist: send, restart: changed } });
   void tracker.start({ ...context, source: 'android_reader' }).then(() => {

@@ -46,7 +46,7 @@ class Settings(context: Context) {
         set(value) { prefs.edit().putBoolean("paused", value).apply() }
     var status: String
         get() = prefs.getString("sync_status", "未連携")!!
-        set(value) { prefs.edit().putString("sync_status", value).apply() }
+        set(value) { prefs.edit().putString("sync_status", value).apply(); SyncUiUpdates.changed() }
     var epoch: Int
         get() = prefs.getInt("epoch", 1)
         set(value) = recordingLocked { if (value != epoch) controlOrder.invalidate(); prefs.edit().putInt("epoch", value).apply() }
@@ -178,7 +178,9 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "wikimf.sqlite", 
         val json = event.toString()
         if (json.toByteArray().size > 65_536 || queueBytes() + json.toByteArray().size > 10 * 1024 * 1024) return false
         val values = ContentValues().apply { put("id", event.getString("event_id")); put("owner", device.userId); put("device", device.deviceId); put("payload", json); put("pending_url", pendingUrl); put("created", System.currentTimeMillis()) }
-        return writableDatabase.insertWithOnConflict("outbox", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1L
+        val inserted = writableDatabase.insertWithOnConflict("outbox", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1L
+        if (inserted) SyncUiUpdates.changed()
+        return inserted
     }
     fun queueBytes(): Long = readableDatabase.rawQuery("SELECT COALESCE(SUM(length(CAST(payload AS BLOB))),0) FROM outbox", null).use { it.moveToFirst(); it.getLong(0) }
     fun count(owner: String): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox WHERE owner=?", arrayOf(owner)).use { it.moveToFirst(); it.getInt(0) }
@@ -187,21 +189,23 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "wikimf.sqlite", 
     fun rows(device: LinkedDevice): List<QueueRow> = readableDatabase.rawQuery("SELECT id,owner,device,payload,pending_url,attempt FROM outbox WHERE owner=? AND device=? AND next_try<=? ORDER BY created, rowid LIMIT 50", arrayOf(device.userId, device.deviceId, System.currentTimeMillis().toString())).use { cursor ->
         buildList { while (cursor.moveToNext()) add(QueueRow(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3), if (cursor.isNull(4)) null else cursor.getString(4), cursor.getInt(5))) }
     }
-    fun finalizePending(id: String, event: JSONObject) { writableDatabase.update("outbox", ContentValues().apply { put("payload", event.toString()); putNull("pending_url") }, "id=? AND pending_url IS NOT NULL", arrayOf(id)) }
-    fun ack(id: String) { writableDatabase.delete("outbox", "id=?", arrayOf(id)) }
+    fun finalizePending(id: String, event: JSONObject) { if (writableDatabase.update("outbox", ContentValues().apply { put("payload", event.toString()); putNull("pending_url") }, "id=? AND pending_url IS NOT NULL", arrayOf(id)) > 0) SyncUiUpdates.changed() }
+    fun ack(id: String) { if (writableDatabase.delete("outbox", "id=?", arrayOf(id)) > 0) SyncUiUpdates.changed() }
     private fun quarantineWhere(where: String, args: Array<String>, reason: String) {
         val db = writableDatabase
+        var changed = false
         db.beginTransaction()
         try {
-            db.rawQuery("SELECT id,owner FROM outbox WHERE $where", args).use { cursor -> while (cursor.moveToNext()) diagnostic(db, cursor.getString(0), cursor.getString(1), reason) }
+            db.rawQuery("SELECT id,owner FROM outbox WHERE $where", args).use { cursor -> while (cursor.moveToNext()) { changed = true; diagnostic(db, cursor.getString(0), cursor.getString(1), reason) } }
             db.delete("outbox", where, args)
             trimDiagnostics(db)
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
+        if (changed) SyncUiUpdates.changed()
     }
     fun quarantine(id: String, reason: String) { quarantineWhere("id=?", arrayOf(id), reason) }
-    fun retry(row: QueueRow, retryAfterMs: Long = 0) { writableDatabase.update("outbox", ContentValues().apply { put("attempt", row.attempt + 1); put("next_try", System.currentTimeMillis() + maxOf(retryAfterMs, SecurityPolicy.nextBackoff(row.attempt)) + kotlin.random.Random.nextLong(500)) }, "id=?", arrayOf(row.id)) }
-    fun discard(owner: String) { writableDatabase.delete("outbox", "owner=?", arrayOf(owner)); writableDatabase.delete("diagnostics", "owner=?", arrayOf(owner)) }
+    fun retry(row: QueueRow, retryAfterMs: Long = 0) { if (writableDatabase.update("outbox", ContentValues().apply { put("attempt", row.attempt + 1); put("next_try", System.currentTimeMillis() + maxOf(retryAfterMs, SecurityPolicy.nextBackoff(row.attempt)) + kotlin.random.Random.nextLong(500)) }, "id=?", arrayOf(row.id)) > 0) SyncUiUpdates.changed() }
+    fun discard(owner: String) { val deleted = writableDatabase.delete("outbox", "owner=?", arrayOf(owner)) + writableDatabase.delete("diagnostics", "owner=?", arrayOf(owner)); if (deleted > 0) SyncUiUpdates.changed() }
     fun discardEpoch(owner: String, epoch: Int) {
         readableDatabase.rawQuery("SELECT id,payload FROM outbox WHERE owner=?", arrayOf(owner)).use { cursor ->
             val ids = buildList { while (cursor.moveToNext()) if ((runCatching { JSONObject(cursor.getString(1)).optInt("recording_epoch") }.getOrNull() ?: 0) < epoch) add(cursor.getString(0)) }

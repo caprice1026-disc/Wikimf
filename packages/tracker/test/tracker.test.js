@@ -146,8 +146,8 @@ test('state boundaries and time-only never invent reading progress', () => {
   assert.equal(inferState(10000,300,240,'jawiki'),'viewed');
   assert.equal(inferState(30000,300,200,'jawiki'),'partial');
   assert.equal(inferState(30000,300,240,'jawiki'),'completed');
-  assert.equal(inferState(239999,3000,2400,'jawiki'),'partial');
-  assert.equal(inferState(240000,3000,2400,'jawiki'),'completed');
+  assert.equal(inferState(29999,3000,2400,'jawiki'),'viewed');
+  assert.equal(inferState(30000,3000,2400,'jawiki'),'completed');
   assert.equal(inferState(1000000,null,0,'jawiki','time_only'),'viewed');
 });
 test('native session ID and fallback reason follow shared event contract without content', () => {
@@ -224,4 +224,33 @@ test('a skipped wall-clock gap cannot credit a sample before the new interval be
     assert.deepEqual(events[2].interval.active_spans_ms, [[0, 1000]]);
     assert.equal(events[2].progress.active_ms_total, 60900);
   });
+});
+
+test('reading-v2 covers at 1.8s with 200ms samples, cumulative visits, and 50% visibility', () => {
+  const reading = session();
+  reading.tick({now:time,mono:0,active:true,ratios:[.5,.499]});
+  for(let t=200;t<=1600;t+=200) reading.tick({now:time+t,mono:t,active:true,ratios:[.5,.499]});
+  assert.deepEqual([...reading.covered],[]);
+  reading.tick({now:time+1800,mono:1800,active:true,ratios:[.5,.499]});assert.deepEqual([...reading.covered],[0]);
+  reading.tick({now:time+2000,mono:2000,active:true,ratios:[0,1]});
+  for(let t=2200;t<=3000;t+=200) reading.tick({now:time+t,mono:t,active:true,ratios:[0,1]});
+  reading.tick({now:time+3200,mono:3200,active:false,ratios:[]});
+  reading.tick({now:time+3400,mono:3400,active:true,ratios:[0,1]});
+  for(let t=3600;t<=4400;t+=200) reading.tick({now:time+t,mono:t,active:true,ratios:[0,1]});
+  assert.deepEqual([...reading.covered],[0,1]);assert.equal(reading.event('reading.observed').measurement_policy_version,'reading-v2');
+});
+test('same-document stop samples its active tail; document replacement does not', () => {
+  for (const reason of ['pause','document_changed']) suspendedTracker(({tracker,clock,events}) => {
+    clock.mono=1000;tracker.tick();clock.mono=1700;tracker.stop(reason);
+    assertIntervals(events);assert.ok(events.every(validateObservation));
+    assert.equal(events.at(-1).progress.active_ms_total,reason==='pause'?1700:1000);
+  });
+});
+test('short and long articles use 80% and 30s completion without a speed gate', () => {
+  for (const wiki of ['jawiki','enwiki']) for(const n of [100,10000]) {
+    assert.equal(inferState(30000,n,n*.8,wiki),'completed');
+    assert.notEqual(inferState(29999,n,n*.8,wiki),'completed');
+    assert.notEqual(inferState(30000,n,n*.8-1,wiki),'completed');
+    assert.notEqual(inferState(30000,n,0,wiki),'completed');
+  }
 });
