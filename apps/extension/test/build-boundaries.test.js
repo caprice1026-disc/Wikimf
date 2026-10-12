@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {mkdtempSync,readFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 
 // Exercise the real produced manifest/config and rejected distribution destinations.
 test('LAN distribution requires an explicit private single origin; standard builds keep their HTTPS boundary',()=>{
+ mkdirSync(resolve('../../.tmp'),{recursive:true});
  const output=mkdtempSync(resolve('../../.tmp/extension-build-'));
  const build=(api,dashboard,lan)=>spawnSync(process.execPath,['build.js'],{encoding:'utf8',env:{...process.env,WIKIMF_API_ORIGIN:api,WIKIMF_DASHBOARD_ORIGIN:dashboard,WIKIMF_LAN_TEST_MODE:lan,WIKIMF_EXTENSION_OUTPUT:pathToFileURL(output+'/').href}});
  for(const [api,dashboard,lan] of [
