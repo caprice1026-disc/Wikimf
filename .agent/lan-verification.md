@@ -12,8 +12,9 @@
 - [x] (2026-10-12) AGENTS.md、PLANS.md、既存 .agent 計画、Compose、API 認証、Android URL 境界と CI を調査した。.agents/skills は存在しない。
 - [x] (2026-10-12) LAN Compose、専用ユーザーの一度限りのログイン、別 applicationId の APK、日本語手順を実装した。
 - [x] (2026-10-12) Backend 128成功/PG専用7skip、LAN14成功、tracker17/extension50成功、Dashboard unit/build成功。Android debug/LAN/release unit/build/lint と実 APK の署名・manifest 境界が成功。Compose config と PowerShell 構文が成功。
-- [ ] Compose 実起動と PostgreSQL 検証を CI で実行する。PC は Docker engine の Bad response / internal ping EOF で阻害されており、OS/WSL/security 設定は変更していない。
-- [ ] 作業ブランチへコミット・push し、同一 commit の CI と APK 成果物を確認する。
+- [x] (2026-10-12) CI run 38198500462 の Backend が PostgreSQL 全135件成功。LAN stack も単一公開ポート・Dashboard assets・同一入口・テストログイン・通常の端末連携・PG上のLAN回帰で成功。PC は Docker engine の Bad response / internal ping EOF で阻害され、OS/WSL/security 設定は変更していない。
+- [x] (2026-10-12) d00b53c を feat/lan-verification へ commit/push し remote と CI の SHA を確認。
+- [ ] .tmp 配下の証拠は upload-artifact の hidden-file 除外で保存されなかったため、対象ファイルだけ include-hidden-files を有効にして再検証する。Android CI と APK artifact の最終結果を確認する。
 
 ## Surprises & Discoveries
 
@@ -82,3 +83,5 @@ Init は既存 .env.lan を上書きしない。Login は同じ専用ユーザ�
 更新記録: 2026-10-12、既存 checkout 調査と承認済み LAN 構成を自己完結する計画にした。
 
 更新記録: 2026-10-12、実装、ローカル回帰テスト、APK と release 境界、Docker 起動の阻害要因を反映した。
+
+更新記録: 2026-10-12、PostgreSQL 全135成功と実 LAN stack の成功を反映。upload-artifact の隠しファイル除外による証拠欠落を見つけ、明示した manifest/log/results のみを保存するよう修正した。

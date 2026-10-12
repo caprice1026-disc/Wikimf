@@ -94,6 +94,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wikimf-lan-apk
+          include-hidden-files: true
           path: |
             apps/android/app/build/outputs/apk/lan/app-lan.apk
             .tmp/lan-apk-manifest.json
@@ -136,6 +137,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lan-stack-results
+          include-hidden-files: true
+          if-no-files-found: error
           path: |
             .tmp/lan-stack-*/compose.log
             .tmp/lan-stack-*/results.json
