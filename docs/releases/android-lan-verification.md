@@ -100,3 +100,6 @@ PC の stack は実機確認用に起動を維持しています。上記 `Login
 通常のフォーム送信で `lan_origin_mismatch` になる原因は、ログインページの `Referrer-Policy: no-referrer` によりブラウザーが `Origin: null` を送ることでした。LAN gateway の `/lan-login` だけを `same-origin` に修正しました。`null`、Origin なし、別サイト、別ポートは引き続き拒否します。他ルートの `no-referrer`、CSRF、単回トークン、記録同意は維持しています。独立 Chrome の実フォームで正常ログインとCookie認証、再利用拒否、CSRF拒否を確認し、LAN unit19件が通過しました。ブラウザーのフォーム送信もCIのLAN stackで検証します。
 
 修正はPCのgateway側だけです。すでにインストールしたLAN APKをそのまま使えます。スマホで `/lan-login` を再読み込みし、新しいトークンを入力してください。端末コードは別で5分有効なので、失効していたらアプリから連携を再開始します。
+
+
+2026-10-12: Origin 修正 commit `8e29f4d00096a8799bc9858c81215f5cd46d46fa` の [CI run 38241459449](https://github.com/caprice1026-disc/Wikimf/actions/runs/38241459449) は全5 job 成功。PostgreSQL 全140件、新しい native browser form 回帰、Android 回帰が通過した。APK はサーバー側修正で変更不要。ユーザー提供の画面で Android の LAN ログインページ到達と端末コード発行を確認したが、実機の最終ペアリング・同期受入は確認待ち。トークン・端末コードは文書やGitへ保存していない。

@@ -88,13 +88,14 @@
     "registry_explicit_8080_rules_found": 0,
     "effective_rule_inventory": "Dedicated inbound Allow rule enabled: TCP8080, Private, local192.168.11.10, remote192.168.11.0/24, EdgeTraversalBlock; no unrelated rule changes by agent",
     "firewall_rule": "Wikimf-LAN-8080-Private-192.168.11.0-24",
-    "firewall_rule_verification": "Created and verified after explicit user consent; netsh rechecked exact scope after Docker update"
+    "firewall_rule_verification": "Created and verified after explicit user consent; netsh rechecked exact scope after Docker update",
+    "real_android_api_reachability": "User-provided screenshots confirmed LAN login page and device-code issuance; final pairing/sync not yet confirmed"
   },
   "ci": {
     "status": "success",
-    "validated_code_commit": "5f69887f6c64a41e14e2e0a948fdb31a117ae794",
-    "run_id": 38198782002,
-    "url": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002",
+    "validated_code_commit": "8e29f4d00096a8799bc9858c81215f5cd46d46fa",
+    "run_id": 38241459449,
+    "url": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38241459449",
     "jobs": {
       "backend": "success",
       "tracker-extension": "success",
@@ -102,22 +103,20 @@
       "lan-stack": "success",
       "android": "success"
     },
-    "backend_postgresql_tests": 135,
+    "backend_postgresql_tests": 140,
     "android_emulator_regressions": 15,
     "lan_stack": [
       "one published port",
       "Dashboard routes/assets",
       "same origin",
+      "native Chromium form Origin/Host/port and privacy headers",
       "one-use browser login",
       "normal device pairing",
       "PostgreSQL retry/duplicate/recording-stop"
-    ],
-    "lan_stack_artifact": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11723764052",
-    "android_regression_artifact": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11724548282"
+    ]
   },
   "not_performed": [
-    "Android real-device install/sync",
-    "real Wi-Fi end-to-end",
+    "Android real-device pairing/sync acceptance",
     "real OAuth",
     "production HTTPS acceptance"
   ],
@@ -152,8 +151,7 @@
     "pc_path": "C:/Users/81905/Downloads/div/Wikimf/.tmp/artifacts/wikimf-lan-ci-5f69887.apk"
   },
   "followup_required": [
-    "Install LAN APK directly and run real-device Wi-Fi sync acceptance",
-    "Opt in to recording in dedicated test user Dashboard and Android after reviewing consent"
+    "Complete Android browser login/device approval and real Wi-Fi sync/retry/duplicate/recording-stop acceptance"
   ],
   "lan_form_origin_fix": {
     "before": {
@@ -176,8 +174,39 @@
       "api_db_container_ids_unchanged": true
     },
     "local_lan_unit_tests": 19,
-    "exact_fix_commit_ci": "pending",
+    "exact_fix_commit_ci": {
+      "commit": "8e29f4d00096a8799bc9858c81215f5cd46d46fa",
+      "run_id": 38241459449,
+      "status": "success",
+      "jobs": 5,
+      "backend_postgresql_tests": 140
+    },
     "android_apk_change_required": false,
     "real_device_request_headers": "not recorded; access logging is disabled"
+  },
+  "ci_previous": {
+    "status": "success",
+    "validated_code_commit": "5f69887f6c64a41e14e2e0a948fdb31a117ae794",
+    "run_id": 38198782002,
+    "url": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002",
+    "jobs": {
+      "backend": "success",
+      "tracker-extension": "success",
+      "dashboard": "success",
+      "lan-stack": "success",
+      "android": "success"
+    },
+    "backend_postgresql_tests": 135,
+    "android_emulator_regressions": 15,
+    "lan_stack": [
+      "one published port",
+      "Dashboard routes/assets",
+      "same origin",
+      "one-use browser login",
+      "normal device pairing",
+      "PostgreSQL retry/duplicate/recording-stop"
+    ],
+    "lan_stack_artifact": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11723764052",
+    "android_regression_artifact": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11724548282"
   }
 }

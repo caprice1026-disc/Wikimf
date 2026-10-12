@@ -111,3 +111,6 @@ wikimf-lan の3サービスを起動し、実 private-IP の入口で health/con
 実機の lan_origin_mismatch を調査した。アクセスログは無効なので実機 request の Origin 原文は保存されていない。独立 Chrome の native POST で Host192.168.11.10:8080・Origin:null・403 を再現し、二重の Referrer-Policy:no-referrer と strict Origin 検査の衝突を特定した。LAN nginx の /lan-login だけ same-origin とし、upstream の同名ヘッダーを hide、location に nosniff/no-store を再指定した。他ルートと本番 policy は維持、null/missing/別port/別site の拒否も維持した。
 
 LAN unit19件、gateway build/nginx syntax、実 Chrome native form303とCookie認証、単回再利用拒否、CSRF拒否、同意OFF維持を確認した。gatewayだけを入替しAPI/DBのID不変を確認した。CIのLAN stackにネイティブブラウザー回帰を追加した。端末の同意/コード承認はユーザーが行う。実トークンは証跡やGitへ保存しない。
+
+
+2026-10-12: Origin 修正 commit `8e29f4d00096a8799bc9858c81215f5cd46d46fa` の [CI run 38241459449](https://github.com/caprice1026-disc/Wikimf/actions/runs/38241459449) は全5 job 成功。PostgreSQL 全140件、新しい native browser form 回帰、Android 回帰が通過した。APK はサーバー側修正で変更不要。ユーザー提供の画面で Android の LAN ログインページ到達と端末コード発行を確認したが、実機の最終ペアリング・同期受入は確認待ち。トークン・端末コードは文書やGitへ保存していない。
