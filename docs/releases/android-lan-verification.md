@@ -6,7 +6,7 @@
 
 `compose.lan.yaml` を単独で使います。PostgreSQL の DB 名は `wikimf_lan`、Compose project は `wikimf-lan` です。build 済み Dashboard と `/api/v1` は同じ入口で配信します。公開するのは PC のプライベート IPv4 の TCP 8080 一つだけです。DB の 5432 と API の 8000 はコンテナー内だけで使います。既存 `compose.yaml` と混ぜないでください。
 
-LAN APK は `org.wikimf.reader.lan`、アプリ名は **wikimf LAN 検証**、version は `0.1.1-lan` です。検証用鍵で署名する非 debug 版です。HTTP は数値の RFC1918 IPv4（192.168.x.x / 10.x.x.x / 172.16–31.x.x）だけをアプリで許可します。通常 release の HTTPS 制限は維持します。署名済み本番版の更新には使いません。鍵が異なる別の LAN APK で更新できない場合、先に LAN 版のローカル履歴を確認・退避してから LAN 版だけを扱ってください。
+LAN APK は `org.wikimf.reader.lan`、アプリ名は **wikimf LAN 検証**、version は `0.1.1-lan` です。検証用鍵で署名する非 debug 版です。HTTP は数値の RFC1918 IPv4（192.168.x.x / 10.x.x.x / 172.16–31.x.x）だけをアプリで許可します。通常 release の HTTPS 制限は維持します。署名済み本番版の更新には使いません。CI の検証鍵は実行ごとに生成され、PC の隔離検証鍵とも異なります。鍵が異なる別の LAN APK で更新できない場合、先に LAN 版のローカル履歴を確認・退避してから LAN 版だけを扱ってください。
 
 テストログインは `ENVIRONMENT=lan` と `LAN_TEST_MODE=1` の専用 factory でだけ存在します。通常 API の起動経路にはありません。本番で LAN flag を指定すると起動に失敗します。実 OAuth の秘密情報はこの Compose に渡しません。ログイン発行スクリプトは収集同意を自動で ON にしません。
 
@@ -27,7 +27,7 @@ Init はランダム秘密情報を `.env.lan` に作り、既存ファイルは
 
 PC で `http://192.168.11.10:8080/health` を開き `status: ok`、`http://192.168.11.10:8080/app` で Dashboard が表示されることを確認します。Android のブラウザーで同じ `/health` が表示されることも確認します。
 
-ファイアウォールの実変更は本作業では行っていません。この PC は全 profile の firewall が有効ですが、既存規則全体は権限不足で確認できていません。必要な場合の最小候補は **受信 TCP 8080、Private profile、ローカルアドレス 192.168.11.10、接続元 192.168.11.0/24** です。Public/全ポート/全接続元の許可は行いません。実際の追加は確認後に行います。AP のクライアント分離やゲスト Wi-Fi でも端末間通信が止まる場合があります。
+ファイアウォールの実変更は本作業では行っていません。レジストリの保存済み規則に 8080 を明示したものは 0 件でしたが、全ポート・ポート範囲・グループポリシーを含む有効な規則の判定は未完了です。この PC は全 profile の firewall が有効ですが、既存規則全体は権限不足で確認できていません。必要な場合の最小候補は **受信 TCP 8080、Private profile、ローカルアドレス 192.168.11.10、接続元 192.168.11.0/24** です。Public/全ポート/全接続元の許可は行いません。実際の追加は確認後に行います。AP のクライアント分離やゲスト Wi-Fi でも端末間通信が止まる場合があります。
 
 ## 検証ユーザーと端末連携
 
@@ -82,3 +82,13 @@ powershell -File scripts/lan.ps1 Down
 Down は専用 DB volume を残します。再起動は Up、再ログインは Login です。自動 stack 検証 `python scripts/verify_lan_stack.py` は別の `wikimf-lan-ci-*` project を loopback の 18080 で起動し、単一公開ポート・Dashboard の直接ルートと asset・ログイン・通常の端末連携・PostgreSQL 上の LAN 回帰テストを確認して停止します。通常の LAN project のデータには触れません。
 
 ローカル実行と CI の最終結果、APK ハッシュは `docs/releases/evidence/lan-verification.json` に記録します。Android 実機、実 Wi-Fi の疎通、実 OAuth、本番 HTTPS はそれぞれ別に合否を記録します。
+
+## 今回の検証結果と入手リンク（2026-10-12）
+
+検証した実装 commit は `5f69887f6c64a41e14e2e0a948fdb31a117ae794`、作業ブランチは `feat/lan-verification` です。[CI run 38198782002](https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002) の全5 job が成功しました。PostgreSQL 全135件、Android CI emulator の通信・Reader lifecycle・privacy・記録制御15件が成功しました。ローカルの Android debug/LAN/release は各20件、lint error 0、build が成功しました。LAN 版には意図した cleartext 設定の lint warning が1件増えます。
+
+[LAN APK ZIP を入手](https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11724577822)できます。ZIP には `app-lan.apk` と `lan-apk-manifest.json` がリポジトリ相対ディレクトリで入っています。artifact の有効期限は 2026-11-11 です。取得した APK の SHA-256 は `55e8c570db91d709727af2b1e5c8c186acc0b85d3e87c264b21bb2923246eda9`、署名証明書 SHA-256 は `70ba5c3ce892becf8e821f6569704a618342aedf3b08e7538153c643425f352b` です。PC へ取得したコピーは `.tmp/artifacts/wikimf-lan-ci-5f69887.apk` にあり、ZIP/実APKのhash・署名・非debug・別IDを再検証済みです。
+
+[LAN stack の実起動証拠](https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11723764052)と[Android の回帰結果](https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11724548282)も保存しました。Windows PowerShell 5.1 では初期設定の4キー・上書き拒否・公開IPv4拒否を隔離ディレクトリで確認しました。
+
+この PC の Docker Desktop は通常の起動を試しましたが `Bad response from Docker engine` と内部 ping の EOF が続き、PC 上の Compose 実起動は確認できていません。OS/WSL/Hyper-V 設定や firewall の変更は行っていません。Docker engine の正常化後に Up を実行し、必要なら最小の firewall 規則の確認を行ってください。実 Android でのインストールと同じ Wi-Fi の同期はユーザー受入確認として残ります。main は `1d3f7db` のまま、merge は行っていません。

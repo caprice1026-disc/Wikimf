@@ -13,17 +13,27 @@
     "dashboard_unit_and_build": "passed",
     "android_debug_lan_release_unit_build_lint": "passed",
     "compose_config": "passed on Compose 2.17.3",
-    "powershell_syntax": "passed"
-  },
-  "apk": {
-    "application_id": "org.wikimf.reader.lan",
-    "version": "0.1.1-lan",
-    "debuggable": false,
-    "lan_http": true,
-    "release_https_boundary": "passed",
-    "signature": "verified",
-    "apk_sha256": "da0fdf5b07e7c6545a921959b5455fe82227f0a428e5ede903b600b35c7fc60c",
-    "certificate_sha256": "4ccaa93feab14719472bb0bf42707e79027b8ec16f88aef576cf4ac8b8612519"
+    "powershell_syntax": "passed",
+    "android_unit_tests": {
+      "debug": 20,
+      "lan": 20,
+      "release": 20
+    },
+    "android_lint": {
+      "errors": 0,
+      "warnings": {
+        "debug": 9,
+        "lan": 10,
+        "release": 9
+      },
+      "lan_extra_warning": "intentional LAN-only cleartext"
+    },
+    "powershell_5_1_setup_smoke": [
+      "private IPv4 writes four keys",
+      "random 32-byte secrets",
+      "existing config preserved",
+      "public IPv4 rejected before write"
+    ]
   },
   "docker_local": {
     "status": "blocked",
@@ -44,10 +54,34 @@
       "profile": "Private",
       "local_address": "192.168.11.10",
       "remote_range": "192.168.11.0/24"
-    }
+    },
+    "registry_explicit_8080_rules_found": 0,
+    "effective_rule_inventory": "CIM ActiveStore query permission unavailable; broad/group-policy rules not fully determined"
   },
   "ci": {
-    "status": "pending push"
+    "status": "success",
+    "validated_code_commit": "5f69887f6c64a41e14e2e0a948fdb31a117ae794",
+    "run_id": 38198782002,
+    "url": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002",
+    "jobs": {
+      "backend": "success",
+      "tracker-extension": "success",
+      "dashboard": "success",
+      "lan-stack": "success",
+      "android": "success"
+    },
+    "backend_postgresql_tests": 135,
+    "android_emulator_regressions": 15,
+    "lan_stack": [
+      "one published port",
+      "Dashboard routes/assets",
+      "same origin",
+      "one-use browser login",
+      "normal device pairing",
+      "PostgreSQL retry/duplicate/recording-stop"
+    ],
+    "lan_stack_artifact": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11723764052",
+    "android_regression_artifact": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11724548282"
   },
   "not_performed": [
     "Android real-device install/sync",
@@ -57,5 +91,37 @@
   ],
   "adb_on_user_devices": false,
   "router_forwarding_or_tunnels": false,
-  "main_merge": false
+  "main_merge": false,
+  "apk_local": {
+    "application_id": "org.wikimf.reader.lan",
+    "version": "0.1.1-lan",
+    "debuggable": false,
+    "lan_http": true,
+    "release_https_boundary": "passed",
+    "signature": "verified",
+    "apk_sha256": "da0fdf5b07e7c6545a921959b5455fe82227f0a428e5ede903b600b35c7fc60c",
+    "certificate_sha256": "4ccaa93feab14719472bb0bf42707e79027b8ec16f88aef576cf4ac8b8612519"
+  },
+  "apk_ci": {
+    "application_id": "org.wikimf.reader.lan",
+    "version": "0.1.1-lan",
+    "debuggable": false,
+    "lan_http": true,
+    "release_https_boundary": "passed",
+    "signature": "verified",
+    "apk_sha256": "55e8c570db91d709727af2b1e5c8c186acc0b85d3e87c264b21bb2923246eda9",
+    "certificate_sha256": "70ba5c3ce892becf8e821f6569704a618342aedf3b08e7538153c643425f352b",
+    "source_commit": "5f69887f6c64a41e14e2e0a948fdb31a117ae794",
+    "ci_run": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002",
+    "artifact_id": 11724577822,
+    "artifact_url": "https://github.com/caprice1026-disc/Wikimf/actions/runs/38198782002/artifacts/11724577822",
+    "archive_sha256": "91a2cc8256d5676c0f185325743b14c2a1ccf5bf570dfb5d39b5c050af06371a",
+    "downloaded_apk_verification": "hash, signature, isolated ID and non-debug manifest passed",
+    "pc_path": "C:/Users/81905/Downloads/div/Wikimf/.tmp/artifacts/wikimf-lan-ci-5f69887.apk"
+  },
+  "followup_required": [
+    "Restore PC Docker engine health before scripts/lan.ps1 Up",
+    "Confirm effective firewall policy and approve any rule change",
+    "Install LAN APK directly and run real-device Wi-Fi sync acceptance"
+  ]
 }

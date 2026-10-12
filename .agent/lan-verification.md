@@ -14,7 +14,7 @@
 - [x] (2026-10-12) Backend 128成功/PG専用7skip、LAN14成功、tracker17/extension50成功、Dashboard unit/build成功。Android debug/LAN/release unit/build/lint と実 APK の署名・manifest 境界が成功。Compose config と PowerShell 構文が成功。
 - [x] (2026-10-12) CI run 38198500462 の Backend が PostgreSQL 全135件成功。LAN stack も単一公開ポート・Dashboard assets・同一入口・テストログイン・通常の端末連携・PG上のLAN回帰で成功。PC は Docker engine の Bad response / internal ping EOF で阻害され、OS/WSL/security 設定は変更していない。
 - [x] (2026-10-12) d00b53c を feat/lan-verification へ commit/push し remote と CI の SHA を確認。
-- [ ] .tmp 配下の証拠は upload-artifact の hidden-file 除外で保存されなかったため、対象ファイルだけ include-hidden-files を有効にして再検証する。Android CI と APK artifact の最終結果を確認する。
+- [x] (2026-10-12) hidden-file 除外を修正した 5f69887 を push。CI run 38198782002 は全5 job成功。PostgreSQL全135件、Android emulator15件成功。APK/manifest/stack証拠を artifact に保存し、CI ZIP と APK を PC へ取得して hash・署名・manifest を再確認した。
 
 ## Surprises & Discoveries
 
@@ -85,3 +85,13 @@ Init は既存 .env.lan を上書きしない。Login は同じ専用ユーザ�
 更新記録: 2026-10-12、実装、ローカル回帰テスト、APK と release 境界、Docker 起動の阻害要因を反映した。
 
 更新記録: 2026-10-12、PostgreSQL 全135成功と実 LAN stack の成功を反映。upload-artifact の隠しファイル除外による証拠欠落を見つけ、明示した manifest/log/results のみを保存するよう修正した。
+
+## 最終結果の追記
+
+承認済み LAN 構成、専用ユーザー準備、同一入口、別 applicationId の非 debug APK、日本語実機手順を完了し、実装 commit `5f69887f6c64a41e14e2e0a948fdb31a117ae794` を remote に push した。CI run 38198782002 は全5 job成功。実 APK の SHA-256 は `55e8c570db91d709727af2b1e5c8c186acc0b85d3e87c264b21bb2923246eda9`。ローカル APK と CI APK は検証鍵が異なるため相互更新には使わない。
+
+Windows PowerShell 5.1 の初期設定・上書き拒否・公開IPv4拒否も確認した。保存済み firewall 規則で 8080 を明示したものは0件だが、CIM ActiveStore の読み取り権限がなく有効規則全体は判定できない。TCP8080 / Private / ローカル192.168.11.10 / 接続元192.168.11.0/24 が必要時の候補であり、実変更は確認待ちである。
+
+残る受入条件は PC Docker engine の正常化、実 Wi-Fi 疎通、Android 実機の直接インストールと同期確認である。実 OAuth / 本番 HTTPS は今回の合格範囲から分ける。Docker/WSL/Hyper-V/security 設定の実変更、本番鍵変更、実機ADB、ルーター操作、main merge は行っていない。最終の文書 commit は検証済み source を変更しないため CI を再実行しない。
+
+更新記録: 2026-10-12、成功した同一実装commitの全CI結果とAPK入手リンク、署名/hash、PowerShell実行結果と残る実機/PC条件を確定した。
