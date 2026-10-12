@@ -154,5 +154,30 @@
   "followup_required": [
     "Install LAN APK directly and run real-device Wi-Fi sync acceptance",
     "Opt in to recording in dedicated test user Dashboard and Android after reviewing consent"
-  ]
+  ],
+  "lan_form_origin_fix": {
+    "before": {
+      "referrer_policy": "no-referrer, no-referrer",
+      "native_origin": "null",
+      "host": "192.168.11.10:8080",
+      "status": 403,
+      "code": "lan_origin_mismatch"
+    },
+    "after": {
+      "login_policy": "same-origin",
+      "other_routes_policy": "no-referrer",
+      "native_origin": "http://192.168.11.10:8080",
+      "native_login_status": 303,
+      "cookie_authenticated": true,
+      "replay_rejected": true,
+      "bad_origin_rejected": true,
+      "csrf_rejected": true,
+      "recording_consent_unchanged": true,
+      "api_db_container_ids_unchanged": true
+    },
+    "local_lan_unit_tests": 19,
+    "exact_fix_commit_ci": "pending",
+    "android_apk_change_required": false,
+    "real_device_request_headers": "not recorded; access logging is disabled"
+  }
 }

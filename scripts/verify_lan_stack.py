@@ -61,6 +61,10 @@ def main():
         for asset in re.findall(r'(?:src|href)="([^"]*/assets/[^\"]+)"', html):
             assert request(asset)
         assert 'LAN' in request('/lan-login')
+        # Real native browser POST catches referrer-policy Origin:null regressions.
+        with log_path.open('a', encoding='utf-8') as log:
+            subprocess.run(['node', str(ROOT/'apps/dashboard/scripts/lan-form-smoke.mjs'), origin],
+                           cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
         # Capture the one-use secret only in memory, never in acceptance evidence/logs.
         login = json.loads(subprocess.check_output(command+['exec','-T','backend','python','-m','wikimf.lan','--prepare','--json'], cwd=ROOT, text=True))
         request('/lan-login','POST',{'token':login['token']},{'Origin':origin},form=True)
@@ -77,6 +81,7 @@ def main():
             'backend','python','-m','pytest','-q','-p','no:cacheprovider','apps/backend/tests/test_lan.py')
         evidence = {'project':project,'single_published_port':True,'health':'passed','dashboard_routes_assets':'passed',
                     'same_origin_config':'passed','one_use_login':'passed','normal_device_pairing':'passed',
+                    'native_browser_form_origin':'passed',
                     'postgres_lan_retry_duplicate_stop_tests':'passed','adb_used':False,'firewall_changed':False}
         (directory/'results.json').write_text(json.dumps(evidence,indent=2)+'\n')
         print(json.dumps(evidence,indent=2))

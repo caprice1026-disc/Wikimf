@@ -80,6 +80,21 @@ def test_invalid_expired_replaced_tokens_and_cross_origin_cannot_login(lan):
     assert client.get('/api/v1/me').status_code == 401
 
 
+@pytest.mark.parametrize('origin', [None, 'null', 'http://192.168.11.10',
+                                  'http://192.168.11.10:8081', 'http://evil.example'])
+def test_form_origin_remains_strict_and_rejection_preserves_token(lan, origin):
+    app, client, path, _ = lan
+    secret = prepare_login(app.state.sessions, path)
+    headers = {} if origin is None else {'Origin': origin}
+    response = client.post('/lan-login', data={'token': secret}, headers=headers)
+    assert response.status_code == 403
+    assert response.json()['error']['code'] == 'lan_origin_mismatch'
+    assert path.exists()
+    # Neither an opaque origin nor a different host/port can consume a token.
+    assert client.post('/lan-login', data={'token': secret}, headers={'Origin': ORIGIN},
+                       follow_redirects=False).status_code == 303
+
+
 def test_lan_pair_sync_retry_duplicate_and_recording_stop(lan):
     app, client, path, fixture = lan
     _, me = login(app, client, path)

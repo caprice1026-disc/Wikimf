@@ -104,3 +104,10 @@ Windows PowerShell 5.1 の初期設定・上書き拒否・公開IPv4拒否も�
 wikimf-lan の3サービスを起動し、実 private-IP の入口で health/config/Dashboard 直接ルートと assets、単回ログイン、CSRF、通常の端末コード承認と単回 exchange、記録 OFF 維持を確認した。DB5432/API8000 の実 HostPort 割当はなく、公開は192.168.11.10:8080のみ。PostgreSQL の分離スキーマで LAN14件（同期・再送・duplicate・記録停止）が通過した。検証用端末は失効済み、実ユーザー同意は OFF、stack はユーザーの実機確認に備えて起動を維持した。
 
 実 Android のインストール・同 Wi-Fi 同期、実 OAuth、本番 HTTPS は未実施。ユーザー端末の ADB、ルーター、main merge は操作していない。後続変更は手順・証跡・本計画のみであり、検証済み実装と CI APK を変更していない。
+
+
+## LAN native form Origin 修正（2026-10-12）
+
+実機の lan_origin_mismatch を調査した。アクセスログは無効なので実機 request の Origin 原文は保存されていない。独立 Chrome の native POST で Host192.168.11.10:8080・Origin:null・403 を再現し、二重の Referrer-Policy:no-referrer と strict Origin 検査の衝突を特定した。LAN nginx の /lan-login だけ same-origin とし、upstream の同名ヘッダーを hide、location に nosniff/no-store を再指定した。他ルートと本番 policy は維持、null/missing/別port/別site の拒否も維持した。
+
+LAN unit19件、gateway build/nginx syntax、実 Chrome native form303とCookie認証、単回再利用拒否、CSRF拒否、同意OFF維持を確認した。gatewayだけを入替しAPI/DBのID不変を確認した。CIのLAN stackにネイティブブラウザー回帰を追加した。端末の同意/コード承認はユーザーが行う。実トークンは証跡やGitへ保存しない。

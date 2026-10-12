@@ -130,6 +130,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm --prefix apps/dashboard ci
+      - name: Install browser for native LAN form regression
+        working-directory: apps/dashboard
+        run: npx playwright install --with-deps chromium
       - name: Verify one-port LAN stack and PostgreSQL LAN regressions
         run: python scripts/verify_lan_stack.py
       - name: Upload LAN stack evidence
