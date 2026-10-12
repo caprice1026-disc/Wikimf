@@ -101,3 +101,5 @@ LAN APKはorg.wikimf.reader.lan、非debug、private HTTPのみ。本番release�
 2026-10-12: main/featへee2039bを通常push、main CI38254050926全5job成功、remote SHA一致。新lanLocal ID/manifestを追加、既存URL境界テストのID期待値を分岐して22単体/build/lint成功。実WebView1.8秒テストを含むローカルエミュレータ18回帰成功。専用QA端末連携・Native UI同意・実Wikipedia追跡を追加検証中。Chrome初回規約は同意待ち。全体レビュー依頼を追加し、現在のAPK/CIを区切ってから進める。
 
 2026-10-12完了追加: 並存非debug版org.wikimf.reader.lan.local、versionCode5、ローカル証明書4cc...2519。専用エミュレータでv4→v5上書き、暗号化認証/設定/履歴/Outbox payload SHA一致。v3からの元fixtureも保存。FixtureをSharedPreferences.apply直後にVM終了していた試験はcommitで保存完了を待つよう修正し、実更新の消失と混同しない。旧CI版org.wikimf.reader.lanは並存のまま。#37可視block絞り込みでChrome矩形363→3、分母24200維持、Android1.8秒回帰成功。#38はidle固定/非同期制御と文書bindingの試験競合を修正中。
+
+2026-10-12区切り: v4→v5更新で全保持検証成功。#38は停止時に消える同文書fixture binding復元と、制御更新完了を上限5秒で待つようにし、実Chrome全フロー成功。共通21/拡張50単体成功。Chrome初回規約未承認、#35/#33のAndroidブラウザ画面確認とDocker保守は保留。#30と全体レビューは次工程。

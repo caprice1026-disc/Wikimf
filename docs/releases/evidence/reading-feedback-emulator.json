@@ -43,5 +43,26 @@
     "Original physical-device retry cause not determined",
     "Old CI APK private signing key unavailable; parallel stable-ID solution approved",
     "Actual OAuth and new HTTPS deployment remain separate"
-  ]
+  ],
+  "chrome": {
+    "mv3_smoke": {
+      "passed": true,
+      "checks": 9,
+      "synthetic_api": true,
+      "fresh_profile": true
+    },
+    "queue_recovery": {
+      "passed": true,
+      "checks": 12,
+      "synthetic_api": true,
+      "fresh_profile": true
+    }
+  },
+  "apk": {
+    "application_id": "org.wikimf.reader.lan.local",
+    "version": "0.1.2-lan-local",
+    "version_code": 5,
+    "sha256": "6134c34be582bf55569a40d6768999a476fd90605b18a2d03a64bb4752dc03ac",
+    "certificate_sha256": "4ccaa93feab14719472bb0bf42707e79027b8ec16f88aef576cf4ac8b8612519"
+  }
 }
