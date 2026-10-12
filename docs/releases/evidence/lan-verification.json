@@ -1,0 +1,61 @@
+{
+  "base_commit": "1d3f7db389160ffb94cf2bc484b8dffcfdd34f4e",
+  "branch": "feat/lan-verification",
+  "checkout": "C:/Users/81905/Downloads/div/Wikimf",
+  "local": {
+    "backend": {
+      "passed": 128,
+      "postgres_only_skipped": 7
+    },
+    "new_lan_tests": 14,
+    "tracker_tests": 17,
+    "extension_tests": 50,
+    "dashboard_unit_and_build": "passed",
+    "android_debug_lan_release_unit_build_lint": "passed",
+    "compose_config": "passed on Compose 2.17.3",
+    "powershell_syntax": "passed"
+  },
+  "apk": {
+    "application_id": "org.wikimf.reader.lan",
+    "version": "0.1.1-lan",
+    "debuggable": false,
+    "lan_http": true,
+    "release_https_boundary": "passed",
+    "signature": "verified",
+    "apk_sha256": "da0fdf5b07e7c6545a921959b5455fe82227f0a428e5ede903b600b35c7fc60c",
+    "certificate_sha256": "4ccaa93feab14719472bb0bf42707e79027b8ec16f88aef576cf4ac8b8612519"
+  },
+  "docker_local": {
+    "status": "blocked",
+    "client": "23.0.5",
+    "compose": "2.17.3",
+    "desktop_launch": "attempted",
+    "error": "Bad response from Docker engine; VMDockerdAPI /ping EOF",
+    "os_or_wsl_settings_changed": false
+  },
+  "network": {
+    "wifi_profile": "Private",
+    "pc_ipv4": "192.168.11.10/24",
+    "firewall_change": false,
+    "firewall_rules_full_read": "permission unavailable",
+    "proposed_rule": {
+      "protocol": "TCP",
+      "port": 8080,
+      "profile": "Private",
+      "local_address": "192.168.11.10",
+      "remote_range": "192.168.11.0/24"
+    }
+  },
+  "ci": {
+    "status": "pending push"
+  },
+  "not_performed": [
+    "Android real-device install/sync",
+    "real Wi-Fi end-to-end",
+    "real OAuth",
+    "production HTTPS acceptance"
+  ],
+  "adb_on_user_devices": false,
+  "router_forwarding_or_tunnels": false,
+  "main_merge": false
+}

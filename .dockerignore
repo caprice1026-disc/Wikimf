@@ -8,3 +8,5 @@
 **/build
 .env
 **/*.log
+
+.env.lan

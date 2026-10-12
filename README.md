@@ -96,3 +96,7 @@ PGテストは専用schemaを使用します。`TEST_DATABASE_URL`未設定時�
 復旧・性能スクリプトは隔離DB/schemaを作成できるローカル検証権限を必要とします。既存DBの保持データを削除しません。Chromeの実デバッグ、Androidの正の時間/coverage/ACK、同ユーザーDashboard表示、実pg_dump/pg_restoreを確認しています。合成provider/記事metadataを使った確認を実OAuthの成功とは数えません。
 
 [検証結果・既知の制約](docs/releases/verification.md)、[70ケース受入台帳](docs/releases/acceptance-matrix.md)、[復旧・配布手順](docs/releases/operations.md) に結果を記録します。既存の `python scripts/package_release.py` は `dist/0.1.0-<commit>/` にdebug APK、拡張ZIP、Dashboard ZIP、SHA256付きmanifestを出力します。実機ST向けの署名済みrelease APKは [ST手順](docs/releases/android-device-ST.md) の `build.ps1 -StagingRelease` で作成します。
+
+## Android 実機の LAN 検証
+
+同じ Wi-Fi の PC に単一ポートで接続する検証環境と、通常版と並存する LAN APK は [日本語手順](docs/releases/android-lan-verification.md) を参照してください。

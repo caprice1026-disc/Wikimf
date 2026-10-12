@@ -1,0 +1,58 @@
+# Independent LAN-only stack. Do not combine with compose.yaml.
+services:
+  db:
+    image: postgres:17.6
+    environment:
+      POSTGRES_DB: wikimf_lan
+      POSTGRES_USER: wikimf
+      POSTGRES_PASSWORD: ${LAN_DB_PASSWORD:?Run scripts/lan.ps1 Init first}
+    volumes:
+      - lan_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wikimf -d wikimf_lan"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    environment:
+      ENVIRONMENT: lan
+      LAN_TEST_MODE: "1"
+      LAN_CREDENTIAL_FILE: /lan-state/bootstrap.json
+      DATABASE_HOST: db
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: wikimf_lan
+      DATABASE_USER: wikimf
+      DATABASE_PASSWORD: ${LAN_DB_PASSWORD:?Run scripts/lan.ps1 Init first}
+      SESSION_SECRET: ${LAN_SESSION_SECRET:?Run scripts/lan.ps1 Init first}
+      API_ORIGIN: http://${LAN_BIND_IP:?Set a private PC IPv4 address}:${LAN_PORT:-8080}
+      DASHBOARD_ORIGIN: http://${LAN_BIND_IP:?Set a private PC IPv4 address}:${LAN_PORT:-8080}
+      WIKIMEDIA_USER_AGENT: wikimf/0.1 LAN verification (https://github.com/caprice1026-disc/Wikimf)
+    volumes:
+      - lan_credentials:/lan-state
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "python -m alembic -c apps/backend/alembic.ini upgrade head && python -m uvicorn wikimf.lan:create_lan_app --factory --app-dir apps/backend --host 0.0.0.0 --port 8000 --workers 1 --no-access-log"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+  gateway:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile.lan
+    ports:
+      - "${LAN_BIND_IP:?Set a private PC IPv4 address}:${LAN_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  lan_postgres_data:
+  lan_credentials:

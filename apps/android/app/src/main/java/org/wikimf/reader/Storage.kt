@@ -33,7 +33,7 @@ class Settings(context: Context) {
             }
         }
     var dashboardOrigin: String?
-        get() = DashboardUrls.base(apiUrl, prefs.getString("dashboard_origin", null), BuildConfig.DEBUG)
+        get() = DashboardUrls.base(apiUrl, prefs.getString("dashboard_origin", null), BuildConfig.DEBUG, BuildConfig.ALLOW_LAN_HTTP)
         set(value) { prefs.edit().putString("dashboard_origin", value).apply() }
     var localConsent: Boolean
         get() = prefs.getBoolean("local_consent", false)

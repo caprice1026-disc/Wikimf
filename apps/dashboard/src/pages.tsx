@@ -109,6 +109,7 @@ function ReauthenticationPanel({ providers }: { providers: Identity[] }) {
       panel?.focus({ preventScroll: true });
     }
   }, [params]);
+  if (import.meta.env.VITE_LAN_TEST_MODE === '1') return <section className="panel"><h2>LAN 検証ユーザー</h2><p>本人確認が必要な操作は、PC で新しいトークンを発行して<a href="/lan-login">検証ログイン</a>を行ってください。実 OAuth の確認は別に行います。</p></section>;
   return <section className="panel reauth-panel" id="reauthentication" tabIndex={-1}>
     <div className="inline"><h2><Icon name="shield" />重要な操作の本人確認</h2><button className="secondary" onClick={() => setOpen(true)} disabled={!providers.length}>本人確認を始める</button></div>
     <p className="muted small">アカウントや全履歴の削除、ログイン方法の変更、公開範囲の拡大には、10分以内の認証が必要です。</p>

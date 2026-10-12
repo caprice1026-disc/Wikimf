@@ -67,3 +67,5 @@ The signed APK is `app/build/outputs/apk/release/app-release.apk`. The helper va
 Staging material stays in ignored `.local/signing/`; its password is protected with Windows DPAPI and access is limited to the current user and SYSTEM. Keep this key for later ST updates. CI may instead supply a PKCS12 keystore and all four `WIKIMF_SIGNING_KEYSTORE`, `WIKIMF_SIGNING_STORE_PASSWORD`, `WIKIMF_SIGNING_KEY_ALIAS`, `WIKIMF_SIGNING_KEY_PASSWORD` environment variables through its secret store. Do not put key material or passwords in Git, logs, or the APK distribution folder.
 
 The API is configurable in Account. `https://wikimf.example/api/v1` is a placeholder, not a working hosted service. Real HTTPS/OAuth remain prerequisites for physical cloud ST. A release APK signed by the ST key cannot overwrite the existing debug-signed app; do not uninstall an existing app before checking its unsent data. Use a separate AVD for release smoke checks and preserve the original debug install.
+
+LAN HTTP 検証版は別 applicationId `org.wikimf.reader.lan` で通常版と並存します。[直接インストールと PC 起動手順](../../docs/releases/android-lan-verification.md) に従ってください。release は HTTPS のみです。

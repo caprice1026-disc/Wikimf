@@ -1,0 +1,12 @@
+FROM node:24-alpine AS dashboard
+WORKDIR /dashboard
+COPY apps/dashboard/package*.json ./
+RUN npm ci
+COPY apps/dashboard ./
+ENV VITE_API_BASE_URL=/api/v1 VITE_LAN_TEST_MODE=1
+RUN npm run build
+
+FROM nginx:1.28-alpine
+COPY apps/dashboard/nginx.lan.conf /etc/nginx/conf.d/default.conf
+COPY --from=dashboard /dashboard/dist /usr/share/nginx/html
+EXPOSE 8080

@@ -36,6 +36,8 @@ def create_app(database_url=None, mediawiki=None):
     app.state.engine, app.state.sessions = engine, factory
     app.state.mediawiki = mediawiki or MediaWikiClient(os.getenv("WIKIMEDIA_USER_AGENT", "wikimf/0.1 (https://github.com/caprice1026-disc/Wikimf)"))
     production = os.getenv("ENVIRONMENT", "development") == "production"
+    if production and os.getenv("LAN_TEST_MODE"):
+        raise RuntimeError("production must not enable LAN test authentication")
     api_origin = os.getenv("API_ORIGIN", "http://localhost:8000").rstrip("/")
     dashboard = os.getenv("DASHBOARD_ORIGIN", "http://localhost:5173").rstrip("/")
     if production and (not api_origin.startswith("https://") or not dashboard.startswith("https://") or not os.getenv("SESSION_SECRET") or engine.dialect.name != "postgresql"):

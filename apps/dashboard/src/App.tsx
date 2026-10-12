@@ -34,7 +34,7 @@ export function App() {
     window.addEventListener('wikimf:auth-expired', expired);
     return () => window.removeEventListener('wikimf:auth-expired', expired);
   }, []);
-  return <AuthContext.Provider value={{ user, privacy, refresh: () => { user.reload(); privacy.reload(); } }}><Routes>
+  return <AuthContext.Provider value={{ user, privacy, refresh: () => { user.reload(); privacy.reload(); } }}>{import.meta.env.VITE_LAN_TEST_MODE === '1' && <div role="note" className="lan-notice">LAN HTTP 検証用 · 専用テストユーザー · <a href="/lan-login">検証ログイン</a></div>}<Routes>
     <Route path="/" element={<LandingPage />} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/u/:userId" element={<PublicProfilePage />} />

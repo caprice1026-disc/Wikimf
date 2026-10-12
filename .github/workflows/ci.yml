@@ -1,7 +1,7 @@
 name: Validate MVP
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/lan-*"]
   pull_request:
 jobs:
   backend:
@@ -87,7 +87,18 @@ jobs:
           keytool -genkeypair -noprompt -keystore .tooling/debug.keystore \
             -storepass android -keypass android -alias androiddebugkey \
             -dname "CN=Android Debug,O=Android,C=US" -validity 10950 -keyalg RSA -keysize 2048
-      - run: gradle testDebugUnitTest assembleDebug lintDebug --no-daemon
+      - run: gradle testDebugUnitTest testLanUnitTest testReleaseUnitTest assembleDebug assembleLan assembleRelease lintDebug lintLan lintRelease --no-daemon
+      - name: Verify LAN APK and release network boundary
+        run: python ../../scripts/verify_android_lan.py --sdk "$ANDROID_HOME"
+      - name: Upload LAN verification APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: wikimf-lan-apk
+          path: |
+            apps/android/app/build/outputs/apk/lan/app-lan.apk
+            .tmp/lan-apk-manifest.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -110,3 +121,21 @@ jobs:
           path: |
             apps/android/app/build/reports/androidTests
             apps/android/app/build/outputs/androidTest-results
+
+  lan-stack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify one-port LAN stack and PostgreSQL LAN regressions
+        run: python scripts/verify_lan_stack.py
+      - name: Upload LAN stack evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lan-stack-results
+          path: |
+            .tmp/lan-stack-*/compose.log
+            .tmp/lan-stack-*/results.json

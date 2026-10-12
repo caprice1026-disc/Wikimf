@@ -24,6 +24,15 @@ android {
         isDebuggable = false
         signingConfig = signingConfigs.findByName("release")
     }
+    buildTypes.create("lan") {
+        initWith(buildTypes.getByName("release"))
+        applicationIdSuffix = ".lan"
+        versionNameSuffix = "-lan"
+        isDebuggable = false
+        signingConfig = signingConfigs.getByName("debug")
+        matchingFallbacks += listOf("release")
+        buildConfigField("boolean", "ALLOW_LAN_HTTP", "true")
+    }
     defaultConfig {
         applicationId = "org.wikimf.reader"
         minSdk = 26
@@ -32,6 +41,7 @@ android {
         versionName = "0.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "DEFAULT_API_URL", "\"https://wikimf.example/api/v1\"")
+        buildConfigField("boolean", "ALLOW_LAN_HTTP", "false")
     }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

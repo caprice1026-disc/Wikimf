@@ -16,7 +16,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
-import java.net.URI
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
@@ -79,7 +78,7 @@ class Api(private val settings: Settings, private val http: OkHttpClient = OkHtt
                 if (control == null || !settings.controlOrder.current(permit)) throw ApiFailure(409, "recording_control_superseded")
             }
         }
-        require(validBase(apiUrl)) { "API URLにはHTTPSを指定してください" }
+        require(validBase(apiUrl)) { if (BuildConfig.ALLOW_LAN_HTTP) "プライベートIPv4のLAN API URLを指定してください" else "API URLにはHTTPSを指定してください" }
         val builder = Request.Builder().url(apiUrl + path).header("Accept", "application/json")
         if (device != null) builder.header("Authorization", "Bearer ${device.token}")
         if (body != null) builder.post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -102,7 +101,7 @@ class Api(private val settings: Settings, private val http: OkHttpClient = OkHtt
         val expectedApi = settings.apiUrl
         try {
             val value = request("/config", device = null).optString("dashboard_url")
-            val origin = DashboardUrls.configuredOrigin(expectedApi, value, BuildConfig.DEBUG) ?: return
+            val origin = DashboardUrls.configuredOrigin(expectedApi, value, BuildConfig.DEBUG, BuildConfig.ALLOW_LAN_HTTP) ?: return
             if (settings.apiUrl == expectedApi) settings.dashboardOrigin = origin
         } catch (failure: Exception) {
             if (failure is CancellationException) throw failure
@@ -171,11 +170,7 @@ class Api(private val settings: Settings, private val http: OkHttpClient = OkHtt
     }
     companion object {
         private val searchCooldown = SearchCooldown()
-        fun validBase(raw: String): Boolean = runCatching {
-            val uri = URI(raw)
-            val secure = uri.scheme == "https" || (BuildConfig.DEBUG && uri.scheme == "http" && uri.host in setOf("10.0.2.2", "localhost", "127.0.0.1"))
-            secure && uri.host != null && uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null && raw.trimEnd('/').endsWith("/api/v1")
-        }.getOrDefault(false)
+        fun validBase(raw: String): Boolean = ApiUrls.validBase(raw, BuildConfig.DEBUG, BuildConfig.ALLOW_LAN_HTTP)
     }
 }
 

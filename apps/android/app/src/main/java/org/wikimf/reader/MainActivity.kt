@@ -216,16 +216,16 @@ class MainActivity : ComponentActivity() {
             item { Text("Account", style = MaterialTheme.typography.headlineMedium) }
             item { Text(device?.displayName ?: "未連携・ゲスト") }
             if (device == null) {
-                item { Text("読む・検索する操作は連携なしで使えます。GoogleまたはGitHubでWebへログインし、この端末を明示的に承認してください。") }
-                item { OutlinedTextField(apiUrl, { apiUrl = it }, label = { Text("wikimf API URL (HTTPS /api/v1)") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                item { Text(if (BuildConfig.ALLOW_LAN_HTTP) "PC で発行したトークンで LAN の Web にログインし、この端末の確認コードを承認してください。実 OAuth の確認は別に行います。" else "読む・検索する操作は連携なしで使えます。GoogleまたはGitHubでWebへログインし、この端末を明示的に承認してください。") }
+                item { OutlinedTextField(apiUrl, { apiUrl = it }, label = { Text(if (BuildConfig.ALLOW_LAN_HTTP) "wikimf API URL (LAN HTTP /api/v1)" else "wikimf API URL (HTTPS /api/v1)") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
                 item { Button(enabled = !busy, onClick = {
                     runCatching { require(Api.validBase(apiUrl)); settings.apiUrl = apiUrl }.onSuccess {
                         perform { val api = Api(settings); api.refreshDashboardOrigin(); pairing = api.request("/device-links", JSONObject().put("source", "android_reader").put("display_name", "Android Reader"), null); pairingStatus = null }
-                    }.onFailure { pairingStatus = "HTTPSのAPI URLを指定してください" }
-                }) { Text("Google / GitHubで端末連携") } }
+                    }.onFailure { pairingStatus = if (BuildConfig.ALLOW_LAN_HTTP) "プライベートIPv4のLAN API URLを指定してください" else "HTTPSのAPI URLを指定してください" }
+                }) { Text(if (BuildConfig.ALLOW_LAN_HTTP) "LAN 検証ユーザーで端末連携" else "Google / GitHubで端末連携") } }
                 pairing?.let { grant ->
                     item { Text("確認コード: ${grant.getString("user_code")}\n有効期限: ${grant.getString("expires_at")}") }
-                    item { Button(onClick = { val target = settings.dashboardOrigin?.let { DashboardUrls.pairing(settings.apiUrl, it, grant.getString("verification_url"), grant.getString("link_id"), BuildConfig.DEBUG) }; if (target != null) openBrowser(target) else pairingStatus = "安全な管理画面の連携URLを確認できません" }) { Text("Webでログイン・承認") } }
+                    item { Button(onClick = { val target = settings.dashboardOrigin?.let { DashboardUrls.pairing(settings.apiUrl, it, grant.getString("verification_url"), grant.getString("link_id"), BuildConfig.DEBUG, BuildConfig.ALLOW_LAN_HTTP) }; if (target != null) openBrowser(target) else pairingStatus = "安全な管理画面の連携URLを確認できません" }) { Text("Webでログイン・承認") } }
                     item { Button(enabled = !busy, onClick = { perform {
                         val result = Api(settings).request("/device-links/${grant.getString("link_id")}/exchange", JSONObject().put("device_secret", grant.getString("device_secret")), null)
                         settings.saveDevice(LinkedDevice(result.getString("user_id"), result.getString("device_id"), result.getString("token"), result.getString("display_name")))
