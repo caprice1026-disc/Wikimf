@@ -114,3 +114,7 @@ CI APKは一時署名鍵によるテスト専用で、既存端末への継続�
 ローカル検証用には既存`.tooling/debug.keystore`を再利用する。秘密鍵はGit/CI artifactへ含めない。`build.ps1`実行前に鍵の存在を確認し、配布前に`verify_android_lan.py --expected-certificate <既知の証明書SHA256>`で一致を検証する。次回更新では`--previous-apk <前のローカルAPK>`も指定し、署名・ID一致とversionCode増加を確認する。鍵が見つからないときに新しい鍵で更新可能と扱わない。ローカルdebug鍵は検証用で、本番release鍵とは別。CIの継続署名を行う場合は保護した専用鍵の登録・アクセス方針を別途承認してから整備する。
 
 今回の新APKは旧CI APKに上書きできない。専用エミュレータの新規インストール・同じローカル鍵での更新を検証する。実機に新しいapplicationIdで並存させる場合は、旧アプリのローカルOutboxが自動移行されないことを説明し、別途承認を得る。
+
+2026-10-12の追加承認: 旧CI版を保持して並存する配布用検証版は`org.wikimf.reader.lan.local`、表示名`wikimf LAN local 検証`とする。ビルド型`lanLocal`はLANのみのHTTP条件を継承し、releaseはHTTPSを維持する。`scripts/publish_local_lan.ps1 -ExpectedCertificate 4ccaa93feab14719472bb0bf42707e79027b8ec16f88aef576cf4ac8b8612519`でこのPCの既存鍵を照合してコピーする。新アプリを同じLANユーザーへ連携するとサーバー受領済み履歴は共有できるが、旧アプリのローカル未送信と端末履歴は移行しない。旧アプリからの同期完了を先に確認し、旧アプリを消さない。旧・新で同時に記録した時間はサーバーの重複区間排除で二重計上しない。
+
+配布コピーは`.tmp/lan-delivery/wikimf-0.1.2-lan-local.apk`と`manifest.json`。manifestはsource commit・実APKハッシュ・versionCode・証明書を記録する。CI一時署名APKとは別。更新検証では専用エミュレータでv4→v5へ上書きし、認証、履歴、設定、未送信の同じpayloadを照合する。SharedPreferencesの非同期保存をテストVM終了前に完了させてから比較し、未保存のfixtureを更新による消失と誤認しない。

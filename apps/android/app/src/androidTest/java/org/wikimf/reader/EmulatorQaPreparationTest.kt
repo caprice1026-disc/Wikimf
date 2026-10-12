@@ -1,5 +1,6 @@
 package org.wikimf.reader
 
+import android.os.Bundle
 import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -28,6 +29,7 @@ class EmulatorQaPreparationTest {
             val api = Api(settings)
             val grant = api.request("/device-links", JSONObject().put("source", "android_reader").put("display_name", "Emulator live ST"), device = null)
             codeFile.writeText(JSONObject().put("link_id", grant.getString("link_id")).put("user_code", grant.getString("user_code")).toString())
+            InstrumentationRegistry.getInstrumentation().sendStatus(0, Bundle().apply { putString("qa_grant", codeFile.readText()) })
             var exchanged: JSONObject? = null
             val deadline = SystemClock.elapsedRealtime() + 90_000
             while (exchanged == null && SystemClock.elapsedRealtime() < deadline) {
@@ -41,6 +43,7 @@ class EmulatorQaPreparationTest {
             assertEquals(device.userId, api.request("/me").getString("user_id"))
             api.refreshDashboardOrigin()
             resultFile.writeText(JSONObject().put("user_id", device.userId).put("device_id", device.deviceId).put("recording_epoch", settings.epoch).put("passed", true).toString())
+            InstrumentationRegistry.getInstrumentation().sendStatus(0, Bundle().apply { putString("qa_result", resultFile.readText()) })
             // Leave the temporary linkage in place; consent must be enabled through the actual Account UI.
         } finally { codeFile.delete() }
     }

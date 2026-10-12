@@ -4,16 +4,16 @@
 
 ## Purpose / Big Picture
 
-Android Account のキュー件数を現在値で一度だけ表示し、同期完了後に自動更新する。Dashboard は記事の現在の手動状態を主表示し、個別の読書回の自動推定を区別する。本文の露出を1.8秒で計測し、速読者へ文字数に比例する待ち時間を要求しない。既存の読書時間、認証、未送信、手動設定を保持する。同じ applicationId・証明書で versionCode を上げた LAN APK を配布する。
+Android Account のキュー件数を現在値で一度だけ表示し、同期完了後に自動更新する。Dashboard は記事の現在の手動状態を主表示し、個別の読書回の自動推定を区別する。本文の露出を1.8秒で計測し、速読者へ文字数に比例する待ち時間を要求しない。既存の読書時間、認証、未送信、手動設定を保持する。旧CI版は保持し、承認された別ID org.wikimf.reader.lan.local と既存ローカル鍵で継続更新できるLAN APKを配布する。
 
 ## Progress
 
 - [x] (2026-10-12) checkoutは変更なし、origin/mainは1d3f7db、作業ブランチfeat/lan-verificationは40a3f08。mainとの差分は既存LAN/Origin構成のみ。AGENTS/PLANSを確認した。
 - [x] (2026-10-12) Issue13/29/7を確認。HTTPS配備29は将来用で、今回実装を開始しない。LANと本番HTTPS/OAuthの境界を保持する。
 - [x] (2026-10-12) 同期二重表示、manual/articleとsessionの状態差、fixed600字/分、1秒採取/2秒露出を診断した。旧CI APKとローカルの署名が異なることを確認した。
-- [ ] キュー現在値・同期状態をリアクティブに表示し、同期完了・queue増加・所有者変更を検証する。
+- [x] キュー現在値・同期状態をリアクティブに表示し、同期完了・queue増加・所有者変更を検証する。
 - [ ] 現在の記事状態と過去の自動推定をAPI/GUIで分け、手動設定と解除、再閲覧の回帰を確認する。
-- [ ] reading-v2の1.8秒計測、採取と境界flush、読了条件、v1/v2共存、既存データ再投影を検証する。
+- [x] reading-v2の1.8秒計測、採取と境界flush、読了条件、v1/v2共存、既存データ再投影を検証する。
 - [ ] 全チェック、同署名の上書きAPK、exact commit CI、mainへの通常pushと稼働更新を完了する。
 
 ## Surprises & Discoveries
@@ -97,3 +97,7 @@ LAN APKはorg.wikimf.reader.lan、非debug、private HTTPのみ。本番release�
 2026-10-12追加決定: 日本語推定上限1800/分、英語1000維持。API追加やcoveragechars主表示への置換は行わない。ユーザーは公式エミュレータ+API35+専用AVD追加5〜8GBを許可、既存ライセンス/ハイパーバイザーのみ使用。Issue31〜36へ分割起票、エミュレータで該当確認前はopenを維持。
 
 2026-10-12検証: tracker20件、extension50件、Dashboardブラウザ26フロー/単体/build、backend136件SQLite（PG専用7件はCIで実行）、Android debug/LAN/release単体・全lint/APK成功。専用WHPX/API35エミュレータでSyncUi/SyncRetry/API/ReaderLifecycle/Privacy/Control17件成功。503/429→保持→duplicateACK検証、実機原因は未確定。
+
+2026-10-12: main/featへee2039bを通常push、main CI38254050926全5job成功、remote SHA一致。新lanLocal ID/manifestを追加、既存URL境界テストのID期待値を分岐して22単体/build/lint成功。実WebView1.8秒テストを含むローカルエミュレータ18回帰成功。専用QA端末連携・Native UI同意・実Wikipedia追跡を追加検証中。Chrome初回規約は同意待ち。全体レビュー依頼を追加し、現在のAPK/CIを区切ってから進める。
+
+2026-10-12完了追加: 並存非debug版org.wikimf.reader.lan.local、versionCode5、ローカル証明書4cc...2519。専用エミュレータでv4→v5上書き、暗号化認証/設定/履歴/Outbox payload SHA一致。v3からの元fixtureも保存。FixtureをSharedPreferences.apply直後にVM終了していた試験はcommitで保存完了を待つよう修正し、実更新の消失と混同しない。旧CI版org.wikimf.reader.lanは並存のまま。#37可視block絞り込みでChrome矩形363→3、分母24200維持、Android1.8秒回帰成功。#38はidle固定/非同期制御と文書bindingの試験競合を修正中。

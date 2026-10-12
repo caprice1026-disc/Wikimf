@@ -254,3 +254,19 @@ test('short and long articles use 80% and 30s completion without a speed gate', 
     assert.notEqual(inferState(30000,n,0,wiki),'completed');
   }
 });
+
+test('observer-ready ticks scan only visible blocks while collapsed prose remains in the document', () => {
+  suspendedTracker(({tracker,clock}) => {
+    let calls=0;
+    const hidden={};const visible={};
+    const chunks=Array.from({length:121},(_,id)=>({id,block:id===120?visible:hidden,range:{
+      getBoundingClientRect:()=>({top:0,bottom:id===120?100:0}),
+      getClientRects:()=>{calls++;return id===120?[{left:0,top:0,right:100,bottom:100,width:100,height:100}]:[]}
+    }}));
+    tracker.extracted={chunks};tracker.byBlock=new Map([[hidden,chunks.slice(0,120)],[visible,[chunks[120]]]]);
+    tracker.candidates=new Set([visible]);tracker.observerReady=true;
+    tracker.session.document.text_chars=24200;tracker.session.document.chunk_chars=Array(121).fill(200);
+    clock.mono=200;tracker.tick();assert.equal(calls,1);
+    assert.equal(tracker.session.document.text_chars,24200);
+  });
+});

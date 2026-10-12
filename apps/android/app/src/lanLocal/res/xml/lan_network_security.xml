@@ -1,0 +1,4 @@
+<network-security-config>
+    <!-- Variable private IPv4 addresses are restricted by ApiUrls and DashboardUrls. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

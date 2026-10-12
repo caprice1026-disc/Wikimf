@@ -57,6 +57,10 @@ jobs:
       - run: npm ci
       - run: npm run test:unit
       - run: npm run build
+      - name: Tracker collapsed-prose viewport regression
+        run: |
+          npx playwright install --with-deps chromium
+          WIKIMF_NODE_MODULES="$PWD/node_modules" node ../../packages/tracker/test/viewport-budget.browser.js
   android:
     runs-on: ubuntu-24.04
     defaults:
@@ -87,9 +91,11 @@ jobs:
           keytool -genkeypair -noprompt -keystore .tooling/debug.keystore \
             -storepass android -keypass android -alias androiddebugkey \
             -dname "CN=Android Debug,O=Android,C=US" -validity 10950 -keyalg RSA -keysize 2048
-      - run: gradle testDebugUnitTest testLanUnitTest testReleaseUnitTest assembleDebug assembleLan assembleRelease lintDebug lintLan lintRelease --no-daemon
+      - run: gradle testDebugUnitTest testLanUnitTest testLanLocalUnitTest testReleaseUnitTest assembleDebug assembleLan assembleLanLocal assembleRelease lintDebug lintLan lintLanLocal lintRelease --no-daemon
       - name: Verify LAN APK and release network boundary
-        run: python ../../scripts/verify_android_lan.py --sdk "$ANDROID_HOME"
+        run: |
+          python ../../scripts/verify_android_lan.py --sdk "$ANDROID_HOME"
+          python ../../scripts/verify_android_lan.py --sdk "$ANDROID_HOME" --variant lanLocal
       - name: Upload CI-only LAN test APK (ephemeral signer)
         uses: actions/upload-artifact@v4
         with:

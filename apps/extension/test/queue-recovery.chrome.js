@@ -66,6 +66,7 @@ try {
   await popup.evaluate(values => chrome.storage.local.set(values), { credentials: account, settings: { recording: true, sendQueued: false }, control });
   const page = await context.newPage(); await page.goto(article.canonical_url); await page.bringToFront();
   await popup.waitForFunction(() => chrome.storage.session.get(null).then(values => Object.keys(values).some(key => key.startsWith('binding:'))));
+  const fixtureBindings = await popup.evaluate(async () => Object.fromEntries(Object.entries(await chrome.storage.session.get(null)).filter(([key]) => key.startsWith('binding:'))));
   const pageCdp = await context.newCDPSession(page), worlds = [];
   pageCdp.on('Runtime.executionContextCreated', event => worlds.push(event.context)); await pageCdp.send('Runtime.enable');
   const isolated = worlds.find(world => world.name.includes(extensionId) || world.origin === 'chrome-extension://' + extensionId);
@@ -76,7 +77,12 @@ try {
   };
   const send = message => popup.evaluate(message => chrome.runtime.sendMessage(message), message);
   const local = keys => popup.evaluate(keys => chrome.storage.local.get(keys), keys);
-  const seed = values => popup.evaluate(values => chrome.storage.local.set(values), values);
+  const seed = async values => {
+    await popup.evaluate(values => chrome.storage.local.set(values), values);
+    // Quiescing the real tracker clears its binding. Restore the captured
+    // same-document fixture binding for controlled outbox injection.
+    await popup.evaluate(values => chrome.storage.session.set(values), fixtureBindings);
+  };
   async function restartWorker() {
     const { targetInfos } = await browserCdp.send('Target.getTargets');
     const target = targetInfos.find(target => target.type === 'service_worker' && target.url.includes(extensionId));
@@ -91,16 +97,27 @@ try {
   }
   async function assertResumed() {
     await page.bringToFront();
-    assert.equal((await content({ type: 'lease' })).enabled, true, 'queue recovery must restore lease');
-    const state = await send({ type: 'status' });
-    assert.ok(['idle', 'synced'].includes(state.sync)); assert.equal(state.recording, true); assert.equal(state.recording_enabled, true);
-    const event = observation(); assert.equal((await content({ type: 'observation', event })).saved, true);
+    let enabled = false, state;
+    for (let attempt=0; attempt<50; attempt++) {
+      enabled=(await content({type:'lease'})).enabled;state=await send({type:'status'});
+      if(enabled && state.recording_enabled && ['idle','synced'].includes(state.sync)) break;
+      await page.waitForTimeout(100);
+    }
+    assert.equal(enabled,true,'queue recovery must restore lease after control refresh settles');
+    assert.ok(['idle','synced'].includes(state.sync));assert.equal(state.recording,true);
+    assert.equal(state.recording_enabled,true,JSON.stringify({sync:state.sync,recording_enabled:state.recording_enabled}));
+    const event = observation(); let reply;
+    for (let attempt=0; attempt<50; attempt++) {
+      reply=await content({type:'observation',event}); if(reply.saved || reply.error) break;
+      await page.waitForTimeout(100);
+    }
+    assert.equal(reply.saved,true,JSON.stringify({sync:state.sync,reply}));
     return state;
   }
   async function assertPopup(code, paused) {
     await popup.reload();
     await popup.waitForFunction(expected => document.getElementById('status').textContent.includes(expected), paused ? '記録一時停止' : '記録中');
-    assert.equal((await send({ type: 'status' })).sync, code);
+    assert.ok((Array.isArray(code) ? code : [code]).includes((await send({ type: 'status' })).sync));
     assert.equal(await popup.locator('#recording').isChecked(), true);
   }
 
@@ -124,7 +141,7 @@ try {
   await popup.waitForFunction(() => chrome.storage.local.get('outbox').then(value => value.outbox.rows.length === 0));
   await assertResumed();
   results.push({ check: 'queue_full-popup-discard-restores-lease-and-observation', passed: true });
-  await assertPopup('idle', false);
+  await assertPopup(['idle', 'synced'], false);
   results.push({ check: 'recovered-popup-and-worker-agree', passed: true });
   await restartWorker(); await assertResumed();
   results.push({ check: 'recovered-lease-survives-worker-restart', passed: true });

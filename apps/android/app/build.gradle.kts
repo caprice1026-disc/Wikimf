@@ -33,11 +33,17 @@ android {
         matchingFallbacks += listOf("release")
         buildConfigField("boolean", "ALLOW_LAN_HTTP", "true")
     }
+    buildTypes.create("lanLocal") {
+        initWith(buildTypes.getByName("lan"))
+        applicationIdSuffix = ".lan.local"
+        versionNameSuffix = "-lan-local"
+        matchingFallbacks += listOf("lan", "release")
+    }
     defaultConfig {
         applicationId = "org.wikimf.reader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
+        versionCode = 5
         versionName = "0.1.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "DEFAULT_API_URL", "\"https://wikimf.example/api/v1\"")
@@ -46,6 +52,8 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
+    testBuildType = providers.gradleProperty("wikimfTestBuildType").getOrElse("debug")
+    check(testBuildType in listOf("debug", "lanLocal")) { "Use debug or the isolated lanLocal variant for instrumentation." }
     testOptions { unitTests.isReturnDefaultValues = true }
     sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("trackerAssets"))
 }

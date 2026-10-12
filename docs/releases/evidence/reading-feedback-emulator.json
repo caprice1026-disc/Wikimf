@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-12",
+  "scope": "dedicated Windows emulator and fresh browser profiles; no physical-device ADB",
+  "android": {
+    "api": 35,
+    "release": "15",
+    "acceleration": "existing WHPX",
+    "regression_tests": 18,
+    "real_wikipedia": {
+      "article": "Imoni",
+      "body_chars": 1919,
+      "coverage": 0.8655549765502866,
+      "active_ms": 80760,
+      "state": "completed",
+      "estimated_chars": 1346
+    },
+    "parallel_packages": [
+      "org.wikimf.reader.lan",
+      "org.wikimf.reader.lan.local"
+    ],
+    "update": {
+      "from_version_code": 4,
+      "to_version_code": 5,
+      "same_certificate": true,
+      "encrypted_auth": true,
+      "preferences": true,
+      "history": true,
+      "exact_outbox_payload": true,
+      "older_v3_payload_retained": true,
+      "physical_device_tested": false
+    }
+  },
+  "tracker_viewport": {
+    "browser": "Chrome/154.0.8037.98",
+    "fixture_body_chars": 24200,
+    "fixture_chunks": 121,
+    "before_rect_calls_650ms": 363,
+    "after_rect_calls_650ms": 3,
+    "android_webview_regression": "pass"
+  },
+  "limits": [
+    "Android Chrome first-run terms await user consent",
+    "Original physical-device retry cause not determined",
+    "Old CI APK private signing key unavailable; parallel stable-ID solution approved",
+    "Actual OAuth and new HTTPS deployment remain separate"
+  ]
+}

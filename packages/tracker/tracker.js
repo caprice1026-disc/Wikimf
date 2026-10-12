@@ -179,7 +179,7 @@ export class DOMTracker {
   constructor({ doc = document, host }) { this.doc = doc; this.host = host; this.session = null; this.enabled = false; this.candidates = new Set(); }
   refreshDocument(extracted) {
     this.extracted = extracted; this.byBlock = new Map();
-    this.observer?.disconnect(); this.candidates.clear();
+    this.observer?.disconnect(); this.candidates.clear(); this.observerReady = false;
     for (const chunk of extracted.chunks) {
       if (!this.byBlock.has(chunk.block)) this.byBlock.set(chunk.block, []);
       this.byBlock.get(chunk.block).push(chunk); this.observer?.observe(chunk.block);
@@ -202,6 +202,7 @@ export class DOMTracker {
     this.interaction = event => { if (event.isTrusted) this.session?.interact(performance.now()); };
     for (const name of ['scroll', 'wheel', 'pointerdown', 'touchstart', 'keydown']) this.doc.addEventListener(name, this.interaction, { passive: true });
     this.observer = new IntersectionObserver(entries => {
+      this.observerReady = true;
       for (const entry of entries) {
         if (entry.isIntersecting) this.candidates.add(entry.target); else this.candidates.delete(entry.target);
       }
@@ -229,8 +230,11 @@ export class DOMTracker {
     }
     this.wasActive = active;
     const ratios = boundary ? this.session.lastRatios : Array(this.extracted.chunks.length).fill(0);
-    if (active && !boundary) for (const chunk of viewportChunks(this.extracted.chunks, win.innerHeight))
-      ratios[chunk.id] = visibleRatio(chunk.range.getClientRects(), win.innerWidth, win.innerHeight);
+    if (active && !boundary) {
+      const groups = this.observerReady ? [...this.candidates].map(block => this.byBlock.get(block) || []) : [this.extracted.chunks];
+      for (const group of groups) for (const chunk of viewportChunks(group, win.innerHeight))
+        ratios[chunk.id] = visibleRatio(chunk.range.getClientRects(), win.innerWidth, win.innerHeight);
+    }
     this.session.tick({ now, mono, active, ratios,
       scrollRatio: win.scrollY / Math.max(1, this.doc.documentElement.scrollHeight - win.innerHeight) });
     if (this.session.clockChanged) { this.stop('clock_changed'); this.host.restart?.(); return; }

@@ -32,7 +32,7 @@ class LanUrlPolicyTest {
         assertEquals(BuildConfig.ALLOW_LAN_HTTP, Api.validBase("http://192.168.11.10:8080/api/v1"))
         if (BuildConfig.ALLOW_LAN_HTTP) {
             assertFalse(BuildConfig.DEBUG)
-            assertEquals("org.wikimf.reader.lan", BuildConfig.APPLICATION_ID)
+            assertEquals(if (BuildConfig.BUILD_TYPE == "lanLocal") "org.wikimf.reader.lan.local" else "org.wikimf.reader.lan", BuildConfig.APPLICATION_ID)
         }
     }
 }
