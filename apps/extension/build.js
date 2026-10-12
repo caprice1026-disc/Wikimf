@@ -2,16 +2,23 @@ import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import '../../packages/tracker/build.js';
 const root = new URL(process.env.WIKIMF_EXTENSION_OUTPUT || './dist/', import.meta.url); await mkdir(root, { recursive: true });
+const lan = process.env.WIKIMF_LAN_TEST_MODE === '1';
 const origin = new URL(process.env.WIKIMF_API_ORIGIN || 'http://localhost:8000');
 const dashboard = new URL(process.env.WIKIMF_DASHBOARD_ORIGIN || (origin.protocol==='http:'?'http://localhost:5173':origin.origin));
+const privateIpv4 = host => {
+  const parts = host.split('.');
+  if (parts.length !== 4 || parts.some(part => !/^(0|[1-9][0-9]{0,2})$/.test(part) || Number(part) > 255)) return false;
+  const [a,b] = parts.map(Number); return a === 10 || a === 192 && b === 168 || a === 172 && b >= 16 && b <= 31;
+};
+if (lan && (origin.protocol !== 'http:' || !privateIpv4(origin.hostname) || origin.origin !== dashboard.origin)) throw new Error('LAN validation requires one explicit private IPv4 HTTP origin.');
 for (const target of [origin,dashboard]) if (target.username || target.password || target.pathname !== '/' || target.search || target.hash ||
-  !(target.protocol === 'https:' || (target.protocol === 'http:' && ['127.0.0.1','localhost'].includes(target.hostname)))) throw new Error('Use HTTPS origins (loopback HTTP is development only).');
+  !(target.protocol === 'https:' || (target.protocol === 'http:' && (['127.0.0.1','localhost'].includes(target.hostname) || lan && privateIpv4(target.hostname))))) throw new Error('Use HTTPS origins; private IPv4 HTTP needs explicit LAN validation mode.');
 const files = ['worker.js','outbox.js','sync-state.js','popup.html','popup.js','popup.css','content.js'];
 for (const file of files) await copyFile(new URL('./src/' + file, import.meta.url), new URL(file, root));
 await copyFile(new URL('../../packages/tracker/dist/wiki-tracker.js', import.meta.url), new URL('wiki-tracker.js', root));
 await copyFile(new URL('../../packages/tracker/tracker.js', import.meta.url), new URL('tracker-module.js', root));
-await writeFile(new URL('config.js', root), `export const API_ORIGIN=${JSON.stringify(origin.origin)};\nexport const DASHBOARD_ORIGIN=${JSON.stringify(dashboard.origin)};\nexport const CLIENT_VERSION='0.1.0';\n`);
-await writeFile(new URL('manifest.json', root), JSON.stringify({ manifest_version: 3, minimum_chrome_version: '114', name: 'wikimf', version: '0.1.0',
+await writeFile(new URL('config.js', root), `export const API_ORIGIN=${JSON.stringify(origin.origin)};\nexport const DASHBOARD_ORIGIN=${JSON.stringify(dashboard.origin)};\nexport const CLIENT_VERSION='${lan ? '0.1.2-lan' : '0.1.2'}';\n`);
+await writeFile(new URL('manifest.json', root), JSON.stringify({ manifest_version: 3, minimum_chrome_version: '114', name: lan ? 'wikimf LAN 検証' : 'wikimf', version: '0.1.2',
   description: '非公開で始める Wikipedia の読書記録。日本語・英語に対応。', incognito: 'not_allowed', permissions: ['storage','alarms'],
   host_permissions: ['https://ja.wikipedia.org/*','https://en.wikipedia.org/*',origin.origin + '/*'],
   background: { service_worker: 'worker.js', type: 'module' }, action: { default_popup: 'popup.html', default_title: 'wikimf' },

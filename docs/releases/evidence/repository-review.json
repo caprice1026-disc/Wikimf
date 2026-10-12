@@ -1,0 +1,74 @@
+{
+  "baseline_commit": "c94dfd19c8388e5a3d5ecca5378ca68bc6b008e9",
+  "issues": [
+    30,
+    33,
+    35,
+    39
+  ],
+  "backend_sqlite": {
+    "passed": 166,
+    "postgres_only_skipped": 7
+  },
+  "backend_postgresql": {
+    "passed": 173,
+    "skipped": 0
+  },
+  "tracker_unit_passed": 21,
+  "extension_unit_passed": 51,
+  "dashboard_browser": "26 existing flows plus OAuth recovery/unsafe-return cases; desktop and 390px",
+  "android_unit_lint_build": [
+    "debug",
+    "lan",
+    "lanLocal",
+    "release"
+  ],
+  "android_emulator_regressions_passed": 20,
+  "android_update": {
+    "from_version_code": 5,
+    "to_version_code": 6,
+    "same_signature": true,
+    "encrypted_auth_history_preferences_exact_outbox_retained": true,
+    "consent_off_after_validation": true,
+    "real_qa_lan_ack": true,
+    "identical_replay_duplicate": true
+  },
+  "android_chrome": {
+    "browser": "Chrome/124.0.6367.219",
+    "terms_accepted": true,
+    "account_added": false,
+    "usage_and_crash_reporting": false,
+    "native_form_origin": true,
+    "normal_login": true,
+    "single_use": true,
+    "manual_primary_state": true,
+    "no_time_or_character_inflation": true,
+    "oauth_recovery_existing_session_ui": true,
+    "oauth_provider_callback": "synthetic provider tests only",
+    "browser_errors": 0,
+    "result": "pass"
+  },
+  "desktop_chrome_extension": {
+    "browser": "154.0.8037.98",
+    "smoke_checks": 9,
+    "queue_checks": 12,
+    "exact_release_zip_loaded": true,
+    "target_lan_health_read_only": true
+  },
+  "apk_sha256": "fb54de1d6a6d54b0d9d082ab65d51b9159fdc19c3fea48583fe7ed6a6e6c282a",
+  "extension_zip_sha256": "38d52478b68e019112db2ba3bc2d67db3da20a7688f26e3ef2ca5ec0f210213b",
+  "backup": {
+    "consistent_snapshot": true,
+    "restore_in_independent_db_matches_all_tables": true,
+    "config_unchanged": true,
+    "source_unchanged": true,
+    "service_interruption": false
+  },
+  "limits": {
+    "live_google_github_oauth": "not tested",
+    "physical_phone_retry_root_cause": "not determined; #32",
+    "physical_phone_adb": false,
+    "firewall_router_changed": false,
+    "user_lan_api_at_verification": "reading-v1; distribution held until updated and verified"
+  }
+}

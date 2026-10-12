@@ -17,3 +17,14 @@ The distribution folder is an unpacked verification artifact. It has not been su
 `node test/backend-chrome.js` (from this package) connects to the repository's separately started PostgreSQL/FastAPI QA server using `.tmp/backend-smoke.json`. It proves strict real API ACK and database activity/stat projections for actual tracker events. Its identity and article metadata remain synthetic, and it never prints credential values. This command requires the local QA server and is intentionally separate from offline CI.
 
 The [control-order follow-up](../../docs/releases/control-order-regressions.md) distinguishes production-source VM tests from actual Chrome/MV3 acceptance and records the current-source verification limits.
+
+
+## LAN 検証 prerelease の ZIP
+
+LAN版は通常版と異なる明示buildです。このPCの検証用入口 `http://192.168.11.10:8080` に固定し、同一LANの信頼できる端末だけで使います。通常buildのHTTPS/開発用loopback制限は維持します。明示LAN buildでも公開HTTP、DNS名、別Dashboard origin、userinfo/query/fragmentを拒否します。
+
+PowerShellで `WIKIMF_LAN_TEST_MODE=1`、`WIKIMF_API_ORIGIN=http://192.168.11.10:8080`、`WIKIMF_DASHBOARD_ORIGIN=http://192.168.11.10:8080` をそのbuildプロセスに設定し、`npm --prefix apps/extension run build` を実行します。dist内の11ファイルだけをZIPに含め、source/test/tooling/profile/credentialsを混ぜません。配布先はGitHubのLAN検証用prereleaseです。ZIPを展開しChromeの拡張管理で「パッケージ化されていない拡張機能を読み込む」を選び、manifest.jsonのあるフォルダーを指定します。Chrome Web Store署名版ではありません。
+
+端末連携はAndroidと同じLAN検証ユーザーで明示的に承認し、PC Dashboardの収集許可と拡張の記録ONを別々に選びます。ZIPを再展開して既存フォルダーを更新し、既存拡張の再読み込みを使います。同じフォルダー・同じ拡張IDならstorageを保持できます。別フォルダーや別IDへ読み込んだ場合は旧ローカルキューが自動移行されません。未送信がある旧拡張を削除せず、先に同期状態を確認してください。
+
+新しいreading-v2拡張を使う前にPCの `/health` がreading-v2を返すことを確認します。実Google/GitHub OAuthはこのLANテストとは分けます。ルーター転送、トンネル、インターネット公開は行いません。

@@ -42,7 +42,7 @@ powershell -File scripts/lan.ps1 Login
 Dashboard の Settings → Privacy で説明を確認し、クラウド収集への同意を ON にします。
 
 1. 下記の LAN APK を Android に直接ダウンロードし、通常のファイル操作でインストールします。ADB は不要です。OS のインストール許可やセキュリティ設定の操作はユーザー自身が判断します。
-2. **wikimf LAN 検証**を開き、Account の API URL に `http://192.168.11.10:8080/api/v1` を設定します。通常版にこの HTTP URL を入れると拒否されるのが正しい動作です。
+2. **wikimf LAN local 検証**を開き、Account の API URL に `http://192.168.11.10:8080/api/v1` を設定します。通常版にこの HTTP URL を入れると拒否されるのが正しい動作です。
 3. アプリで端末連携を開始します。表示された 8 桁の user code と端末名を確認します。
 4. 「Web でログイン・承認」を開きます。Android のブラウザーは PC と Cookie を共有しないため、先に PC で Login を再実行し、新しいトークンで Android の `/lan-login` にログインします。ログイン後、アプリに戻って同じ承認リンクをもう一度開きます。
 5. アプリが表示した user code を承認画面に入力します。期限は 5 分です。切れていればアプリで連携を再開始します。承認後アプリへ戻り、連携確認を実行します。専用ユーザーと端末連携済みの表示を確認し、アプリの Account でクラウド記録の説明を読んで同意を ON にします。
@@ -61,7 +61,9 @@ OAuth の Google/GitHub ボタンは今回使いません。LAN 用バナーの�
 
 ## APK の入手と build
 
-GitHub Actions の **Validate MVP** の作業ブランチ実行から artifact **wikimf-lan-apk** をダウンロードし、ZIP 内の `app-lan.apk` を取り出します。`lan-apk-manifest.json` に APK SHA-256、証明書 SHA-256、別 ID、release HTTPS 境界の検証結果があります。APK が作成された同じ commit の実行を選んでください。artifact の保持は 30 日です。
+配布用には、このPCの同一署名鍵で作成した **lanLocal** APKと同じ生成時のmanifestを使います。保存先は `.tmp/lan-delivery/wikimf-0.1.2-lan-local.apk` と `manifest.json` です。新APKの実機確認は、PCの `/health` が `measurement_policy_version: reading-v2` を返すようAPIを更新・検証してから開始してください。ユーザーへの送付はその確認まで保留します。
+
+GitHub Actionsのartifact **wikimf-lan-ci-test-apk** はCI内の一時署名によるテスト専用です。配布用LAN local APKの更新には使いません。秘密鍵はartifactに含まれず、実行ごとに署名が変わります。旧アプリのアンインストールやデータ削除で署名の相違を回避しないでください。
 
 PC 内で build する場合は次を実行します。Node24/JDK17/Gradle8.9/SDK35 を使います。bootstrap は既存のグローバル SDK を変更せず checkout 内に tooling を作ります。
 
@@ -118,3 +120,8 @@ CI APKは一時署名鍵によるテスト専用で、既存端末への継続�
 2026-10-12の追加承認: 旧CI版を保持して並存する配布用検証版は`org.wikimf.reader.lan.local`、表示名`wikimf LAN local 検証`とする。ビルド型`lanLocal`はLANのみのHTTP条件を継承し、releaseはHTTPSを維持する。`scripts/publish_local_lan.ps1 -ExpectedCertificate 4ccaa93feab14719472bb0bf42707e79027b8ec16f88aef576cf4ac8b8612519`でこのPCの既存鍵を照合してコピーする。新アプリを同じLANユーザーへ連携するとサーバー受領済み履歴は共有できるが、旧アプリのローカル未送信と端末履歴は移行しない。旧アプリからの同期完了を先に確認し、旧アプリを消さない。旧・新で同時に記録した時間はサーバーの重複区間排除で二重計上しない。
 
 配布コピーは`.tmp/lan-delivery/wikimf-0.1.2-lan-local.apk`と`manifest.json`。manifestはsource commit・実APKハッシュ・versionCode・証明書を記録する。CI一時署名APKとは別。更新検証では専用エミュレータでv4→v5へ上書きし、認証、履歴、設定、未送信の同じpayloadを照合する。SharedPreferencesの非同期保存をテストVM終了前に完了させてから比較し、未保存のfixtureを更新による消失と誤認しない。
+
+
+2026-10-12: #39の同期予約修正を含む最終候補はversionCode **6**。同じローカル証明書でv5から上書きし、暗号化認証、端末内履歴、同意設定、未送信payloadのSHA256一致を専用Android15エミュレータで確認した。保持確認では未送信を消さず、その後に独立QAの実LAN APIへ送信してACK、同一イベント再送のduplicateを確認し、端末のクラウド同意をOFFへ戻した。APK SHA256は `fb54de1d6a6d54b0d9d082ab65d51b9159fdc19c3fea48583fe7ed6a6e6c282a`。証明書は前項の `4ccaa93f...` と同一。ユーザー実機の未送信データの移行・削除は行っていない。
+
+#30のOAuth取消・失敗からの回復は、合成Google/GitHub provider、PC Chrome、Android WebViewで確認した。実providerのHTTPS認証は未完了である。ユーザー承認後にAndroid Chrome 124.0.6367.219の使用状況・クラッシュ送信をOFFと確認し、Googleアカウントを追加せず初回規約に同意した。Android Chromeのnative LANフォーム、正常ログイン、token再利用拒否、手動3状態のOverview優先表示、時間・文字数非増加、既存セッションでの回復UIを独立QAで確認した。規約の正式リンクは https://policies.google.com/terms/ と https://www.google.com/chrome/terms/ 。#32の実機同期保留は#39と同じ原因とは確定していない。API更新後の実機で再現した場合は、画面のエラー分類・HTTPコード、発生時刻、操作前後の未送信件数、同じWi-Fiから `/health` が開くかを確認する。トークンや記録全体を共有せず、キューの削除やADBは使わない。
