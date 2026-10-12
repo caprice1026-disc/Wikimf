@@ -17,7 +17,7 @@ class RetainedStateRegressionTest {
     @Test fun encryptedCredentialsHistoryAndOutboxSurviveInPlaceUpdate() = runBlocking {
         val args=InstrumentationRegistry.getArguments()
         val stage=args.getString("retention_stage")
-        assumeTrue(stage in setOf("seed","verify"))
+        assumeTrue(stage in setOf("seed","verify","sync"))
         val context=InstrumentationRegistry.getInstrumentation().targetContext
         val settings=Settings(context)
         val device=settings.device() ?: error("Link the dedicated emulator before this check")
@@ -49,8 +49,25 @@ class RetainedStateRegressionTest {
                 assertEquals(args.getString("expected_payload_sha256"),digest(row.payload))
                 assertTrue("Local opt-in persists",settings.localConsent);assertFalse("Cloud opt-in stays OFF",settings.cloudConsent)
                 assertTrue(store.history(device.userId,"recent","enwiki").any { it.title=="APK update retention fixture" })
-                // Remove only this test's acknowledged zero-time fixture after preserving it through the update.
-                store.ack(row.id)
+                if(stage=="sync") {
+                    // A real LAN API ACK, then an identical replay, establishes delivery and deduplication.
+                    // Restrict this opt-in test to the dedicated emulator's loopback QA stack.
+                    assertEquals("http://10.0.2.2:18080/api/v1",settings.apiUrl)
+                    val event=JSONObject(row.payload)
+                    try {
+                        settings.cloudConsent=true
+                        assertTrue(SyncEngine(context).sync())
+                        assertFalse(store.rows(device).any { it.id==row.id })
+                        val api=Api(settings);val control=api.recordingControl(store,device)
+                        assertTrue(settings.serverEnabled)
+                        val replay=api.request("/reading-events/batch",JSONObject().put("schema_version",1).put("events",JSONArray().put(event)),device,control)
+                        assertEquals("duplicate",replay.getJSONArray("results").getJSONObject(0).getString("status"))
+                        assertFalse(store.rows(device).any { it.id==row.id })
+                    } finally {
+                        settings.cloudConsent=false
+                        assertTrue(context.getSharedPreferences("preferences",android.content.Context.MODE_PRIVATE).edit().commit())
+                    }
+                }
             }
         }
     }

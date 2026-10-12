@@ -18,6 +18,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -269,9 +270,25 @@ class SyncEngine(private val context: Context) {
         ready.filter { it.first.id !in received }.forEach { store.retry(it.first) }
     }
     companion object {
+        private val scheduling = Executors.newSingleThreadExecutor()
         fun schedule(context: Context) {
-            val work = OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
-            WorkManager.getInstance(context).enqueueUniqueWork("wikimf-sync", ExistingWorkPolicy.KEEP, work)
+            val app = context.applicationContext
+            scheduling.execute {
+                try {
+                    val manager = WorkManager.getInstance(app)
+                    // Read/enqueue on one non-Main executor. A pending work will see
+                    // all committed rows; a running work needs one guaranteed tail.
+                    val pending = manager.getWorkInfosForUniqueWork("wikimf-sync").get()
+                        .any { it.state in setOf(WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED) }
+                    if (!pending) {
+                        val work = OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
+                        manager.enqueueUniqueWork("wikimf-sync", ExistingWorkPolicy.APPEND_OR_REPLACE, work).result.get()
+                    }
+                } catch (failure: Exception) {
+                    if (failure is InterruptedException) Thread.currentThread().interrupt()
+                    Settings(app).status = "同期予約を保留しました。再開時に再試行します"
+                }
+            }
         }
     }
 }

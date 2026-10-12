@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { apiUrl, ApiError, mutate, safeRedirect, setCsrfToken } from './api';
+import { apiUrl, ApiError, mutate, safeLoginReturn, setCsrfToken } from './api';
 import { Achievements, DailyBars, EmptyState, ErrorNotice, MutationNotice, PageHeader, Resource, StatRail } from './components';
 import { useMutation, useResource } from './hooks';
 import { periodQuery } from './format';
@@ -98,9 +98,10 @@ function LoginPage() {
   const { user } = useAuth();
   const [params] = useSearchParams();
   const returnTo = params.get('returnTo') || '/app';
-  const allowedReturn = safeRedirect(returnTo) || (returnTo.startsWith('/link-device/') || returnTo.startsWith('/device-link') ? returnTo : '/app');
-  if (user.data) return <Navigate to={allowedReturn} replace />;
-  return <BasicShell><section className="login-panel"><p className="eyebrow">WELCOME TO YOUR LEDGER</p><h1>続きは、あなたのページで。</h1><p>Google または GitHub でログインしてください。<br />Wikipedia のアカウントは必要ありません。</p><div className="login-buttons">{['google', 'github'].map(provider => <a className="button secondary" href={apiUrl(`/auth/${provider}/start?return_to=${encodeURIComponent(allowedReturn)}`)} key={provider}>{provider === 'google' ? 'Google' : 'GitHub'} で続ける <span aria-hidden="true">↗</span></a>)}</div>{params.get('error') && <p role="alert" className="error-notice">ログインを完了できませんでした。もう一度お試しください。</p>}<p className="muted small">すでに別のログイン方法を使っている場合は、その方法でログインしてから Account で追加してください。メールアドレスが同じでも、自動で結合しません。</p><p className="privacy-note">🔒 クラウドへの記録と公開は、ログイン後に選べます。</p></section></BasicShell>;
+  const allowedReturn = safeLoginReturn(returnTo);
+  const error = params.get('error');
+  if (user.data && !error) return <Navigate to={allowedReturn} replace />;
+  return <BasicShell><section className="login-panel"><p className="eyebrow">WELCOME TO YOUR LEDGER</p><h1>続きは、あなたのページで。</h1><p>Google または GitHub でログインしてください。<br />Wikipedia のアカウントは必要ありません。</p><div className="login-buttons">{['google', 'github'].map(provider => <a className="button secondary" href={apiUrl(`/auth/${provider}/start?return_to=${encodeURIComponent(allowedReturn)}`)} key={provider}>{provider === 'google' ? 'Google' : 'GitHub'} で続ける <span aria-hidden="true">↗</span></a>)}</div>{error && <p role="alert" className="error-notice">{error === 'oauth_cancelled' ? 'ログインをキャンセルしました。もう一度試すか、現在のログインで続けてください。' : 'ログインを完了できませんでした。もう一度お試しください。'}</p>}{error && user.data && <Link className="button secondary" to={allowedReturn}>現在のログインで続ける</Link>}<p className="muted small">すでに別のログイン方法を使っている場合は、その方法でログインしてから Account で追加してください。メールアドレスが同じでも、自動で結合しません。</p><p className="privacy-note">🔒 クラウドへの記録と公開は、ログイン後に選べます。</p></section></BasicShell>;
 }
 
 function OverviewPage() {

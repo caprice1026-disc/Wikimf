@@ -49,9 +49,12 @@ export function safeWikipediaUrl(url: string): string | null {
   } catch { return null; }
 }
 
-export function safeRedirect(url: string): string | null {
+export function safeLoginReturn(value: string): string {
   try {
-    const parsed = new URL(url, window.location.origin);
-    return parsed.origin === window.location.origin && parsed.pathname.startsWith('/app') ? parsed.pathname + parsed.search : null;
-  } catch { return null; }
+    if (value.length > 2000 || !value.startsWith('/') || value.includes('//') || /[\\\x00-\x1f]/.test(value)) return '/app';
+    const parsed = new URL(value, window.location.origin);
+    const allowed = ['/home','/app','/device-link'].includes(parsed.pathname) || ['/app/','/link-device/','/device-link/'].some(prefix => parsed.pathname.startsWith(prefix));
+    if (parsed.origin !== window.location.origin || parsed.hash || !allowed || ['token','device_secret','code'].some(key => parsed.searchParams.has(key))) return '/app';
+    return parsed.pathname + parsed.search;
+  } catch { return '/app'; }
 }

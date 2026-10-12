@@ -92,6 +92,20 @@ try {
   await page.getByRole('heading', { name: '続きは、あなたのページで。' }).waitFor();
   await page.screenshot({ path: new URL('../output/redesign-login-desktop-fixture.png', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'), fullPage: true });
   assert.ok(await page.getByRole('link', { name: /Google で続ける/ }).getAttribute('href'));
+  for (const logged of [false,true]) {
+    authenticated=logged;
+    const target='/link-device/12345678-1234-4234-8234-123456789abc?source=android';
+    await page.goto(`${base}/login?error=oauth_cancelled&returnTo=${encodeURIComponent(target)}`);
+    await page.getByRole('alert').filter({hasText:'ログインをキャンセルしました'}).waitFor();
+    const retry=await page.getByRole('link',{name:/Google で続ける/}).getAttribute('href');
+    assert.equal(new URL(retry,base).searchParams.get('return_to'),target);
+    assert.equal(await page.getByRole('link',{name:'現在のログインで続ける',exact:true}).count(),logged?1:0);
+  }
+  for(const target of ['https://evil.invalid/app','//evil.invalid/app','/app?token=secret','/app#fragment','/application']) {
+    await page.goto(`${base}/login?error=oauth_failed&returnTo=${encodeURIComponent(target)}`);
+    await page.getByRole('alert').waitFor();
+    assert.equal(new URL(await page.getByRole('link',{name:/Google で続ける/}).getAttribute('href'),base).searchParams.get('return_to'),'/app');
+  }
   authenticated = true;
   await page.goto(`${base}/app`);
   await page.getByRole('heading', { name: 'Reading journal', exact: true }).waitFor();

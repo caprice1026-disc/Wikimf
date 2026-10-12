@@ -198,25 +198,39 @@ def create_app(database_url=None, mediawiki=None):
         def reauth_redirect(key,value):
             target = flow["return_to"]
             return RedirectResponse(dashboard+target+("&" if "?" in target else "?")+urlencode({key:value}),status_code=303)
+        async def clear_provider_state():
+            framework = getattr(client, "framework", None)
+            if framework is not None:
+                await framework.clear_state_data(request.session, state)
+        def login_recovery(code):
+            # Only the return validated at start and bound to this state is trusted.
+            return RedirectResponse(dashboard+"/login?"+urlencode({"error":code,"returnTo":flow["return_to"]}),status_code=303)
         if flow.get("reauth_user_id") and request.query_params.get("error"):
+            await clear_provider_state()
             return reauth_redirect("reauth_error","reauthentication_cancelled" if request.query_params["error"]=="access_denied" else "reauthentication_failed")
+        if not flow.get("reauth_user_id") and not flow.get("link_user_id") and request.query_params.get("error"):
+            await clear_provider_state()
+            return login_recovery("oauth_cancelled" if request.query_params["error"]=="access_denied" else "oauth_failed")
         try:
             grant = await client.authorize_access_token(request)
             if provider == "google":
                 info = grant.get("userinfo")
-                if not info or not info.get("sub"):
+                if not isinstance(info, dict) or not info.get("sub"):
                     raise APIError("oauth_invalid_identity",400)
                 subject,name = str(info["sub"]),info.get("name","Reader")
             else:
                 response = await client.get("user",token=grant,headers={"Accept":"application/vnd.github+json"})
                 response.raise_for_status()
                 info = response.json()
-                if not isinstance(info.get("id"),int):
+                if not isinstance(info, dict) or not isinstance(info.get("id"),int):
                     raise APIError("oauth_invalid_identity",400)
                 subject,name = str(info["id"]),info.get("name") or info.get("login") or "Reader"
-        except (OAuthError,httpx.HTTPError,ValueError,APIError):
+        except (OAuthError,httpx.HTTPError,ValueError,APIError) as failure:
+            await clear_provider_state()
             if flow.get("reauth_user_id"):
                 return reauth_redirect("reauth_error","reauthentication_failed")
+            if not flow.get("link_user_id"):
+                return login_recovery("oauth_cancelled" if isinstance(failure,OAuthError) and failure.error=="access_denied" else "oauth_failed")
             raise APIError("oauth_failed",400) from None
         link_user_id = flow["link_user_id"]
         authenticated_at = None
