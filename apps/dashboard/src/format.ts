@@ -53,3 +53,16 @@ export function periodQuery(period: string, timezone: string, now = new Date()) 
   }
   return query;
 }
+
+
+export function achievementProgress(item: { id: string; progress: number; target: number }) {
+  if (item.id === 'reading-hour') {
+    const value = item.progress / 60_000;
+    const target = item.target / 60_000;
+    // Floor the display so an unearned 59.999 minutes never looks like 60/60.
+    const shown = Math.floor(item.progress / 6_000) / 10;
+    return { value, target, text: `${value > 0 && shown === 0 ? '<0.1' : number(shown)} / ${number(target)} 分` };
+  }
+  const unit = item.id === 'footprints' ? '記事' : item.id === 'two-languages' ? '言語' : '件';
+  return { value: item.progress, target: item.target, text: `${number(item.progress)} / ${number(item.target)} ${unit}` };
+}

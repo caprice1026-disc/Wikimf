@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ApiError, errorMessage } from './api';
-import { dateTime, duration, number, shiftDate, sourceLabel } from './format';
+import { achievementProgress, dateTime, duration, number, shiftDate, sourceLabel } from './format';
 import { Icon } from './icons';
 import type { Achievement, Activity, ReadingState, Stats } from './types';
 
@@ -45,7 +45,10 @@ export function DailyBars({ daily, timezone, columns = false }: { daily: Stats['
   return <div className="daily-bars" aria-label={`${timezone} の日別読書時間`}>{daily.length === 0 ? <p className="muted">この期間の読書時間はまだありません。</p> : daily.map(day => <div className="daily-bar" key={day.date}><span>{dateTime(`${day.date}T12:00:00Z`, 'UTC', true)}</span><div><span style={{ width: `${day.active_ms / maximum * 100}%` }} /></div><strong>{duration(day.active_ms)}</strong></div>)}</div>;
 }
 export function Achievements({ items }: { items: Achievement[] }) {
-  return <div className="achievement-grid">{items.map(item => <article className={`achievement ${item.earned ? 'earned' : ''}`} key={item.id}><span className="achievement-icon"><Icon name={item.earned ? 'spark' : 'book'} /></span><p className="eyebrow">{item.earned ? 'ACHIEVED' : 'NEXT CHAPTER'}</p><h3>{item.name}</h3><p>{item.description}</p>{!item.earned && <><progress aria-label={item.name} value={item.progress} max={item.target} /><small>{number(item.progress)} / {number(item.target)}</small></>}</article>)}</div>;
+  return <div className="achievement-grid">{items.map(item => {
+    const progress = achievementProgress(item);
+    return <article className={`achievement ${item.earned ? 'earned' : ''}`} key={item.id}><span className="achievement-icon"><Icon name={item.earned ? 'spark' : 'book'} /></span><p className="eyebrow">{item.earned ? 'ACHIEVED' : 'NEXT CHAPTER'}</p><h3>{item.name}</h3><p>{item.description}</p>{!item.earned && <><progress aria-label={item.name} value={progress.value} max={progress.target} /><small>{progress.text}</small></>}</article>;
+  })}</div>;
 }
 export function ConfirmDialog({ title, children, label = '削除する', busy, onConfirm, onClose, requireWord = false, destructive = true }: { title: string; children: ReactNode; label?: string; busy: boolean; onConfirm: () => void; onClose: () => void; requireWord?: boolean; destructive?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);

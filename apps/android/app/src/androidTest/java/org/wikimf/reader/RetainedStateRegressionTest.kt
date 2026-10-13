@@ -17,13 +17,20 @@ class RetainedStateRegressionTest {
     @Test fun encryptedCredentialsHistoryAndOutboxSurviveInPlaceUpdate() = runBlocking {
         val args=InstrumentationRegistry.getArguments()
         val stage=args.getString("retention_stage")
-        assumeTrue(stage in setOf("seed","verify","sync"))
+        assumeTrue(stage in setOf("seed","verify","sync","cleanup_fixture"))
         val context=InstrumentationRegistry.getInstrumentation().targetContext
         val settings=Settings(context)
         val device=settings.device() ?: error("Link the dedicated emulator before this check")
         assertEquals(device.userId,Api(settings).request("/me").getString("user_id"))
         LocalStore(context).use { store ->
-            if(stage=="seed") {
+            if(stage=="cleanup_fixture") {
+                assertEquals("http://10.0.2.2:18080/api/v1",settings.apiUrl)
+                val id=UUID.fromString(args.getString("expected_event_id")).toString()
+                // Remove only the explicitly identified synthetic check; preserve all other rows.
+                store.writableDatabase.delete("diagnostics","id=? AND owner=?",arrayOf(id,device.userId))
+                store.writableDatabase.delete("outbox","id=? AND owner=?",arrayOf(id,device.userId))
+                SyncUiUpdates.changed()
+            } else if(stage=="seed") {
                 assertFalse(settings.cloudConsent)
                 val id=UUID.randomUUID().toString();val stamp=Instant.now().toString()
                 val event=JSONObject().put("schema_version",1).put("event_id",id).put("type","session.opened")

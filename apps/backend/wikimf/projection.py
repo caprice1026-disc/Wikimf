@@ -223,7 +223,7 @@ def stats(projection, start=None, end=None, wiki=None, tz="Asia/Tokyo"):
 
 def achievements(projection):
     summary = stats(projection)
-    values = [("footprints","読書の足跡","自動閲覧10記事",summary["library"]["qualified_article_count"],10),
-              ("reading-hour","継続した読書","アクティブ時間60分",summary["activity"]["active_ms"],3600000),
+    values = [("footprints","読書の足跡","10記事の読書を自動で記録",summary["library"]["qualified_article_count"],10),
+              ("reading-hour","継続した読書","読書時間を合計60分",summary["activity"]["active_ms"],3600000),
               ("two-languages","二つの言語","日英それぞれ1件の読書活動",sum(summary["by_wiki"][w]["activity_count"]>0 for w in RATES),2)]
     return [{"id":key,"name":name,"description":desc,"earned":value>=target,"progress":value,"target":target} for key,name,desc,value,target in values]

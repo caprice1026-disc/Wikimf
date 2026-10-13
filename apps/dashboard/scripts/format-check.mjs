@@ -17,3 +17,17 @@ assert.equal(duration(0), '0m');
 assert.equal(duration(1000), '<1m');
 assert.equal(dateTime(undefined, 'UTC'), '記録なし');
 console.log('Dashboard date/time formatting checks: PASS (JST boundary and 23/25-hour DST days).');
+
+
+const { achievementProgress } = await import('../src/format.ts');
+const hour = ms => achievementProgress({ id: 'reading-hour', progress: ms, target: 3_600_000 });
+assert.equal(hour(0).text, '0 / 60 分');
+assert.equal(hour(1000).text, '<0.1 / 60 分');
+assert.equal(hour(90_000).text, '1.5 / 60 分');
+assert.equal(hour(3_599_999).text, '59.9 / 60 分');
+assert.equal(hour(3_600_000).text, '60 / 60 分');
+assert.equal(hour(90_000).value, 1.5);
+assert.equal(hour(90_000).target, 60);
+assert.equal(achievementProgress({ id: 'footprints', progress: 2, target: 10 }).text, '2 / 10 記事');
+assert.equal(achievementProgress({ id: 'two-languages', progress: 1, target: 2 }).text, '1 / 2 言語');
+console.log('Achievement unit checks: PASS (minutes, goal boundary, article and language counts).');

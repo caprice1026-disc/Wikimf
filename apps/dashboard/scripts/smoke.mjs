@@ -22,6 +22,7 @@ let devices = [{ device_id: 'device-fixture-1', display_name: 'Pixel fixture', s
 const mutations = [], requests = [];
 let delayActivities = 0, failActivities = false, requireRecentAuth = false, reauthMode = 'cancelled', csrf = 'synthetic-csrf';
 const earned = [{ id: 'first-reading', name: 'First page', description: '検証用の節目', earned: true, progress: 1, target: 1 }];
+const goals = [{id:'reading-hour',name:'継続した読書',description:'読書時間を合計60分',earned:false,progress:90_000,target:3_600_000},{id:'footprints',name:'読書の足跡',description:'10記事の読書を自動で記録',earned:false,progress:2,target:10}];
 
 await page.route('**/api/v1/**', async route => {
   const request = route.request();
@@ -71,7 +72,7 @@ await page.route('**/api/v1/**', async route => {
   }
   else if (path.match(/^\/me\/articles\/[^/]+\/history$/)) { records = records.filter(item => !path.includes(item.article_id)); activities = activities.filter(item => !path.includes(item.article_id)); body = { deleted: true, recording_epoch: 1 }; }
   else if (path.startsWith('/me/articles/')) { body = records.find(item => path.endsWith(item.article_id)); if (!body) { status = 404; body = { error: { code: 'article_not_found' } }; } }
-  else if (path === '/me/achievements') body = { items: earned.map(item => ({ ...item, earned: records.length > 0, progress: records.length ? 1 : 0 })) };
+  else if (path === '/me/achievements') body = { items: [...earned.map(item => ({ ...item, earned: records.length > 0, progress: records.length ? 1 : 0 })),...goals] };
   else if (path === '/me/identities') body = { items: identities };
   else if (path.startsWith('/me/identities/') && method === 'DELETE') { assert.ok(identities.length > 1); identities = identities.filter(identity => !path.endsWith(identity.provider)); body = { unlinked: true }; }
   else if (path === '/me/devices') body = { items: devices };
@@ -123,6 +124,14 @@ try {
   await page.getByRole('button', { name: 'ライトモードに切り替え' }).click();
 
 
+  await page.goto(`${base}/app/achievements`);
+  await page.getByRole('heading', { name: 'Achievements', exact: true }).waitFor();
+  const readingGoal=page.locator('.achievement').filter({has:page.getByRole('heading',{name:'継続した読書',exact:true})});
+  await readingGoal.getByText('1.5 / 60 分',{exact:true}).waitFor();
+  assert.equal(await readingGoal.locator('progress').getAttribute('value'),'1.5');
+  assert.equal(await readingGoal.locator('progress').getAttribute('max'),'60');
+  assert.equal(await page.getByText('2 / 10 記事',{exact:true}).count(),1);
+  assert.ok(await page.getByText('手動で状態を変えても読書時間や称号の進捗は増えません。',{exact:false}).count());
   for (const [path, title, name] of [['activity', 'Activity', 'activity'], ['stats', 'Statistics', 'stats'], ['achievements', 'Achievements', 'achievements'], ['settings', 'Your space', 'more'], ['settings/account', 'Account & devices', 'account']]) {
     await page.goto(`${base}/app/${path}`);
     await page.getByRole('heading', { name: title, exact: true }).waitFor();

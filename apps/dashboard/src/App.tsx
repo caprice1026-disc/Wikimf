@@ -118,7 +118,7 @@ function OverviewPage() {
 
 function AchievementsPage() {
   const value = useResource<Page<Achievement>>('/me/achievements');
-  return <><PageHeader title="Achievements" description="数字を競うためではなく、積み上げた読書の小さな節目。" /><Resource value={value}>{data => <><h2 className="section-label">これまでの節目</h2>{data.items.some(item => item.earned) ? <Achievements items={data.items.filter(item => item.earned)} /> : <EmptyState title="これからの記録が、最初の節目に。" description="自動計測した読書が、称号の根拠になります。手動の読了設定では進みません。" setup={false} />}<h2 className="section-label">次の一歩</h2><Achievements items={data.items.filter(item => !item.earned).slice(0, 3)} /></>}</Resource></>;
+  return <><PageHeader title="Achievements" description="数字を競うためではなく、積み上げた読書の小さな節目。" /><p className="muted small">記事の自動判定（閲覧・途中まで・読了）は、表示状況と読書時間から決まります。手動設定だけの記事は自動記録の記事数に含まず、手動で状態を変えても読書時間や称号の進捗は増えません。</p><Resource value={value}>{data => <><h2 className="section-label">これまでの節目</h2>{data.items.some(item => item.earned) ? <Achievements items={data.items.filter(item => item.earned)} /> : <EmptyState title="これからの記録が、最初の節目に。" description="自動計測した読書が、称号の根拠になります。手動の読了設定では進みません。" setup={false} />}<h2 className="section-label">次の一歩</h2><Achievements items={data.items.filter(item => !item.earned).slice(0, 3)} /></>}</Resource></>;
 }
 
 function MorePage() {

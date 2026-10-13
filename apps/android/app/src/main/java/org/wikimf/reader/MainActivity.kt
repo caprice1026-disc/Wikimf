@@ -28,7 +28,6 @@ import androidx.webkit.WebViewFeature
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import org.json.JSONTokener
-import java.net.URI
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
@@ -96,6 +95,7 @@ class MainActivity : ComponentActivity() {
                     Box {
                         TextButton(onClick = { menu = true }) { Text("メニュー") }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(text = { Text("Wikipediaホームへ") }, enabled = controller.webView != null, onClick = { menu = false; controller.goHome() })
                             DropdownMenuItem(text = { Text("再読み込み") }, onClick = { menu = false; if (controller.crashed) { renderGeneration++; controller.crashed = false } else controller.webView?.reload() })
                             DropdownMenuItem(text = { Text("ブラウザで開く") }, onClick = { menu = false; external = controller.url })
                             DropdownMenuItem(text = { Text("URLを共有") }, onClick = { menu = false; startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, controller.url), "URLを共有")) })
@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         external?.let { url ->
-            AlertDialog(onDismissRequest = { external = null }, title = { Text("ブラウザで開く") }, text = { Text(runCatching { URI(url).host }.getOrNull() ?: "不正なURL") }, confirmButton = { TextButton(onClick = { external = null; if (UrlPolicy.classify(url) != UrlPolicy.Destination.REJECT) openBrowser(url) }) { Text("開く") } }, dismissButton = { TextButton(onClick = { external = null }) { Text("キャンセル") } })
+            ExternalLinkDialog(url, onOpen = { target -> external = null; openBrowser(target) }, onCancel = { external = null })
         }
         if (actionDialog == "logout") AlertDialog(onDismissRequest = { actionDialog = null }, title = { Text("端末連携を解除") }, text = { Text("未送信 ${store.count(owner)}件。クラウドの端末失効はDashboardで管理できます。") }, confirmButton = {
             TextButton(onClick = { scope.launch { val success = SyncEngine(applicationContext).sync(); tick++; if (success && store.count(owner) == 0) { controller.stop("logout"); settings.unlink(); actionDialog = null; tick++ } else message = "未送信の記録があります。再試行するか破棄してください" } }) { Text("同期して解除") }
@@ -240,7 +240,7 @@ class MainActivity : ComponentActivity() {
             stats?.let { value ->
                 val library = value.getJSONObject("library")
                 val activity = value.getJSONObject("activity")
-                item { Text("自動閲覧記事数 ${library.getLong("qualified_article_count")}\n読了記事数 ${library.getJSONObject("state_counts").getLong("completed")}\nアクティブ時間 ${activity.getLong("active_ms") / 60_000}分\n推定読書文字数 ${activity.getLong("estimated_unique_read_chars")}") }
+                item { Text("自動判定のある記事数 ${library.getLong("qualified_article_count")}\n読了記事数 ${library.getJSONObject("state_counts").getLong("completed")}\nアクティブ時間 ${activity.getLong("active_ms") / 60_000}分\n推定読書文字数 ${activity.getLong("estimated_unique_read_chars")}") }
             }
             item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("端末内の記事履歴を保存", Modifier.weight(1f)); Switch(checked = localConsent, onCheckedChange = { localConsent = it; settings.localConsent = it; changed() }) } }
             item { Text("最近見た記事と検索結果から開いた記事を保存します。入力語は保存しません。検索語はWikipediaへ送られます。", style = MaterialTheme.typography.bodySmall) }
@@ -452,6 +452,16 @@ internal class ReaderController(
         webView?.requestFocus()
         webView?.evaluateJavascript("window.WKMF_CONTEXT=$context;\n$bundle", null)
         status = ""
+    }
+    fun goHome() {
+        val view = webView ?: return
+        val generation = pageGeneration
+        val home = UrlPolicy.initialUrl("", UrlPolicy.wiki(url) ?: settings.language)
+        // Flush sampled activity while the old document/binding is still current.
+        // loadUrl then uses the usual navigation lifecycle and keeps back history.
+        view.evaluateJavascript("window.WKMF_NATIVE?.setActive(false)") {
+            if (view === webView && generation == pageGeneration) view.loadUrl(home)
+        }
     }
     fun stop(reason: String) { webView?.evaluateJavascript("window.WKMF_NATIVE?.stop(${JSONObject.quote(reason)})", null); contextStarted = false; hostActive = false }
     fun destroy() { stop("pause"); pageGeneration++; pageReady = false; domEligible = false; resolveJob?.cancel(); deletionResumeJob?.cancel(); webView?.destroy(); webView = null }

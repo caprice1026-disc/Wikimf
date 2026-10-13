@@ -84,4 +84,12 @@ class BoundaryTest {
         assertTrue("An empty closing interval is valid", guard.accepts(boundary, now + 60_000))
         assertTrue(SecurityPolicy.nextBackoff(100) <= 900_000)
     }
+    @org.junit.Test fun homeDestinationsRemainReadableAndUnmeasurable() {
+        for(wiki in listOf("jawiki","enwiki")) {
+            val home=UrlPolicy.initialUrl("",wiki)
+            org.junit.Assert.assertEquals(wiki,UrlPolicy.wiki(home))
+            org.junit.Assert.assertEquals(UrlPolicy.Destination.READER,UrlPolicy.classify(home))
+            org.junit.Assert.assertFalse(UrlPolicy.measurable(home))
+        }
+    }
 }
