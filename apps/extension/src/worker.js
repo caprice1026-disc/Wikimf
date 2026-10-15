@@ -1,10 +1,12 @@
-import { Outbox, trustedContent, trustedPage, focusedTab, validateObservation } from './outbox.js';
+import { Outbox, queueExpirySummary, trustedContent, trustedPage, focusedTab, validateObservation } from './outbox.js';
 import { API_ORIGIN, DASHBOARD_ORIGIN, CLIENT_VERSION } from './config.js';
 import { articleLocation } from './tracker-module.js';
 import { isQueueProblem, recordingBlocked, nextSyncCode, recoveredQueueCode } from './sync-state.js';
 const api = chrome, storage = api.storage.local, outbox = new Outbox(storage);
+const expiryClock = { wall: Date.now(), monotonic: performance.now() };
 let syncing = null, retryAt = 0, failures = 0;
 let pairingPoll = null;
+let draining = false;
 let statusTail = Promise.resolve();
 const bindings = new Map(), resolutions = new Map();
 let controlSequence = 0, appliedControlSequence = 0, localGeneration = 0, viewGeneration = 0, unlinking = false;
@@ -152,6 +154,20 @@ async function sync(force = false, expectedAuth = null, expectedGeneration = loc
   })().finally(() => { syncing = null; });
   return syncing;
 }
+async function drainQueue(auth,generation) {
+  if(draining)throw new Error('unsent_records');
+  draining=true;
+  try {
+    const ids=new Set((await outbox.read()).rows.filter(row=>row.owner.user_id===auth?.user_id&&row.owner.device_id===auth?.device_id).map(row=>row.event.event_id));
+    const remaining=async()=> (await outbox.read()).rows.filter(row=>ids.has(row.event.event_id)&&row.owner.user_id===auth?.user_id&&row.owner.device_id===auth?.device_id).length;
+    let pending=ids.size;const deadline=Date.now()+120000;
+    for(let rounds=pending;pending&&rounds>0;rounds--){
+      if(Date.now()>=deadline||!await currentOwner(auth,generation)||!await sync(true,auth,generation))return false;
+      const after=await remaining();if(after>=pending)return false;pending=after;
+    }
+    return pending===0;
+  } finally {draining=false;}
+}
 async function pairStart() {
   const existing = await owner();
   if (existing) throw new Error('already_linked');
@@ -208,17 +224,20 @@ async function status() {
       const response = await request('/me/articles/' + binding.article_id, { auth, signal: AbortSignal.timeout(3000) });
       if (response.ok) {
         const record = await response.json();
-        currentArticle = { title: record.article.title, wiki: binding.wiki, state: record.effective_state,
+        currentArticle = { article_id: binding.article_id, title: record.article.title, wiki: binding.wiki, state: record.effective_state,
           evidence: record.evidence, active_ms: record.active_ms, coverage: record.coverage };
       }
     } catch { /* The persisted queue status is available even when article metadata is offline. */ }
   }
   if (generation !== localGeneration || sequence !== controlSequence || applied !== appliedControlSequence) return status();
+  const wall = Date.now(), clockStable = Math.abs(wall - expiryClock.wall - (performance.now() - expiryClock.monotonic)) <= 60000;
   return { linked: !!auth, display_name: auth?.display_name, recording: options.recording, sendQueued: !!options.sendQueued,
+    operation_in_progress: unlinking || draining, unlinking,
     recording_enabled: !!auth && !unlinking && options.recording && !recordingBlocked(code) &&
       appliedControlSequence === controlSequence && stored.control?.collection_enabled === true,
     queued: state.rows.filter(row => row.owner.user_id === auth?.user_id && row.owner.device_id === auth?.device_id).length,
     rejected: state.quarantine.length, discarded: state.lossCount, sync: code,
+    expiry: queueExpirySummary(state.rows, auth, wall, clockStable),
     current_article: currentArticle,
     pairing: stored.pairing ? { user_code: stored.pairing.user_code, expires_at: stored.pairing.expires_at } : null, dashboard_url: DASHBOARD_ORIGIN };
 }
@@ -318,9 +337,13 @@ async function pageMessage(message) {
       if (changed) { await notifyStop(); if (message.sendQueued || message.enabled) void sync(); }
       return status();
     }
-    case 'sync': await sync(true, auth, generation); return status();
+    case 'sync': if(message.drain)await drainQueue(auth,generation);else await sync(true, auth, generation); return status();
+    case 'discard.preview':
+      if(!auth)throw new Error('link_required');
+      {const state=await outbox.read();const ids=state.rows.filter(row=>row.owner.user_id===auth.user_id&&row.owner.device_id===auth.device_id).map(row=>row.event.event_id);
+      if(!await currentOwner(auth,generation))throw new Error('queue_changed');return {device_id:auth.device_id,event_ids:ids,queued:ids.length};}
     case 'discard':
-      if (auth) { await outbox.discard(auth); if (await recoverQueueProblem()) await notifyStop(); }
+      if (auth) { if(message.expected_device_id&&message.expected_device_id!==auth.device_id)throw new Error('queue_changed');if(await outbox.discard(auth,message.expected_event_ids,()=>currentOwner(auth,generation))===false)throw new Error('queue_changed');if (await recoverQueueProblem()) await notifyStop(); }
       return status();
     case 'logout': {
       if (!auth) return status();
@@ -342,7 +365,7 @@ async function pageMessage(message) {
         }
         if (pending && !message.discard) throw new Error('unsent_records');
         if (!await currentOwner(auth, generation) || generation !== localGeneration) throw new Error('unsent_records');
-        if (message.discard) await outbox.discard(auth);
+        if (message.discard) { if(message.expected_device_id&&message.expected_device_id!==auth.device_id)throw new Error('queue_changed');if(await outbox.discard(auth,message.expected_event_ids,()=>currentOwner(auth,generation))===false)throw new Error('queue_changed'); }
         await outbox.serial(async () => {
           if (!await currentOwner(auth, generation) || generation !== localGeneration) throw new Error('unsent_records');
           await storage.remove(['credentials', 'control', 'pairing']);

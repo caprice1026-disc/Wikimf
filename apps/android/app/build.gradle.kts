@@ -11,6 +11,9 @@ android {
     compileSdk = 35
     buildToolsVersion = "35.0.0"
     signingConfigs.getByName("debug") { storeFile = rootProject.file(".tooling/debug.keystore") }
+    if (providers.gradleProperty("wikimfIsolatedUiTest").orNull == "true") {
+        buildTypes.getByName("debug") { applicationIdSuffix = ".uitest" }
+    }
     if (releaseSigning.values.all { it != null }) {
         signingConfigs.create("release") {
             storeFile = rootProject.file(releaseSigning.getValue("WIKIMF_SIGNING_KEYSTORE")!!)
@@ -43,8 +46,8 @@ android {
         applicationId = "org.wikimf.reader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.1.3"
+        versionCode = 9
+        versionName = "0.1.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "DEFAULT_API_URL", "\"https://wikimf.example/api/v1\"")
         buildConfigField("boolean", "ALLOW_LAN_HTTP", "false")

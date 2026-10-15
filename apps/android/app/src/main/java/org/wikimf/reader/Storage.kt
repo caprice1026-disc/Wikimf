@@ -206,6 +206,25 @@ class LocalStore(context: Context) : SQLiteOpenHelper(context, "wikimf.sqlite", 
     fun quarantine(id: String, reason: String) { quarantineWhere("id=?", arrayOf(id), reason) }
     fun retry(row: QueueRow, retryAfterMs: Long = 0) { if (writableDatabase.update("outbox", ContentValues().apply { put("attempt", row.attempt + 1); put("next_try", System.currentTimeMillis() + maxOf(retryAfterMs, SecurityPolicy.nextBackoff(row.attempt)) + kotlin.random.Random.nextLong(500)) }, "id=?", arrayOf(row.id)) > 0) SyncUiUpdates.changed() }
     fun discard(owner: String) { val deleted = writableDatabase.delete("outbox", "owner=?", arrayOf(owner)) + writableDatabase.delete("diagnostics", "owner=?", arrayOf(owner)); if (deleted > 0) SyncUiUpdates.changed() }
+    internal fun pendingDiscardSnapshot(owner: String): PendingDiscardSnapshot {
+        fun ids(table: String) = readableDatabase.rawQuery("SELECT id FROM $table WHERE owner=?", arrayOf(owner)).use { cursor ->
+            buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) }
+        }
+        return PendingDiscardSnapshot(owner, ids("outbox"), ids("diagnostics"))
+    }
+    internal fun discardConfirmed(snapshot: PendingDiscardSnapshot): Boolean {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            // A changed count or replaced row requires a new confirmation, including same-count changes.
+            if (pendingDiscardSnapshot(snapshot.owner) != snapshot) return false
+            db.delete("outbox", "owner=?", arrayOf(snapshot.owner))
+            db.delete("diagnostics", "owner=?", arrayOf(snapshot.owner))
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        SyncUiUpdates.changed()
+        return true
+    }
     fun discardEpoch(owner: String, epoch: Int) {
         readableDatabase.rawQuery("SELECT id,payload FROM outbox WHERE owner=?", arrayOf(owner)).use { cursor ->
             val ids = buildList { while (cursor.moveToNext()) if ((runCatching { JSONObject(cursor.getString(1)).optInt("recording_epoch") }.getOrNull() ?: 0) < epoch) add(cursor.getString(0)) }

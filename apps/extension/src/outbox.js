@@ -1,6 +1,23 @@
 export const QUEUE_LIMIT = 8 * 1024 * 1024; // Leave space under chrome.storage.local's 10 MiB quota.
 export const QUEUE_AGE_MS = 7 * 86400000;
 export const MAX_OBSERVATION_BYTES = 65536;
+export function queueExpirySummary(rows, owner, now = Date.now(), clockStable = true) {
+  const own = owner ? rows.filter(row => row.owner?.user_id === owner.user_id && row.owner?.device_id === owner.device_id) : [];
+  const result = { near_count: 0, expired_count: 0, unknown_count: 0, remaining_ms: null, clock_anomaly: !clockStable };
+  if (!Number.isSafeInteger(now) || now < 0 || !clockStable) { result.unknown_count = own.length; return result; }
+  for (const row of own) {
+    const dates = [row.event?.occurred_at, row.event?.session_started_at];
+    const times = [row.created_at, ...dates.map(value => typeof value === 'string' ? Date.parse(value) : NaN)];
+    if (times.some(time => !Number.isSafeInteger(time) || time < 0 || time > now)) { result.unknown_count++; continue; }
+    const remaining = Math.min(...times) + QUEUE_AGE_MS - now;
+    if (remaining < 0) result.expired_count++;
+    else if (remaining <= 86400000) {
+      result.near_count++;
+      result.remaining_ms = Math.min(result.remaining_ms ?? remaining, remaining);
+    }
+  }
+  return result;
+}
 export class Outbox {
   constructor(storage, now = Date.now) { this.storage = storage; this.now = now; this.tail = Promise.resolve(); }
   serial(operation) { const result = this.tail.then(operation); this.tail = result.catch(() => {}); return result; }
@@ -89,11 +106,18 @@ export class Outbox {
       await this.storage.set({ outbox: state, ...(persistControl ? { control } : {}) }); return removed;
     });
   }
-  discard(owner) {
+  discard(owner, expectedIds = null, isCurrent = () => true) {
     return this.serial(async () => {
       const state = await this.read(), before = state.rows.length;
+      if(!await isCurrent())return false;
+      if(expectedIds){
+        const own=state.rows.filter(row=>row.owner.user_id===owner.user_id&&row.owner.device_id===owner.device_id).map(row=>row.event.event_id);
+        if(!Array.isArray(expectedIds))return false;
+        const expected=new Set(expectedIds);
+        if(expected.size!==own.length||own.some(id=>!expected.has(id)))return false;
+      }
       state.rows = state.rows.filter(row => row.owner.user_id !== owner.user_id || row.owner.device_id !== owner.device_id);
-      state.lossCount += before - state.rows.length; await this.storage.set({ outbox: state });
+      state.lossCount += before - state.rows.length; await this.storage.set({ outbox: state });return true;
     });
   }
 }

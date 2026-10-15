@@ -19,10 +19,10 @@ test('LAN distribution requires an explicit private single origin; standard buil
  ])assert.notEqual(build(api,dashboard,lan).status,0,'Unsafe distribution build must be rejected');
  assert.equal(build('http://192.168.11.10:8080','http://192.168.11.10:8080','1').status,0);
  const manifest=JSON.parse(readFileSync(output+'/manifest.json','utf8'));
- assert.equal(manifest.name,'wikimf LAN 検証');assert.equal(manifest.version,'0.1.2');
+  assert.equal(manifest.name,'wikimf LAN 検証');assert.equal(manifest.version,'0.1.5');
  assert.deepEqual(manifest.host_permissions,['https://ja.wikipedia.org/*','https://en.wikipedia.org/*','http://192.168.11.10:8080/*']);
  assert.ok(!manifest.permissions.includes('cookies'));
- const config=readFileSync(output+'/config.js','utf8');assert.ok(config.includes("CLIENT_VERSION='0.1.2-lan'"));
+  const config=readFileSync(output+'/config.js','utf8');assert.ok(config.includes("CLIENT_VERSION='0.1.5-lan'"));
  assert.equal(build('https://reader.invalid','https://reader.invalid','').status,0);
  assert.ok(!JSON.parse(readFileSync(output+'/manifest.json','utf8')).host_permissions.some(p=>p.startsWith('http:')));
 });

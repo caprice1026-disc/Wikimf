@@ -65,15 +65,25 @@ try {
   await context.route('https://ja.wikipedia.org/wiki/Fixture*', route => route.fulfill({ status: 200, contentType: 'text/html', body: fixture }));
   await popup.evaluate(values => chrome.storage.local.set(values), { credentials: account, settings: { recording: true, sendQueued: false }, control });
   const page = await context.newPage(); await page.goto(article.canonical_url); await page.bringToFront();
-  await popup.waitForFunction(() => chrome.storage.session.get(null).then(values => Object.keys(values).some(key => key.startsWith('binding:'))));
-  const fixtureBindings = await popup.evaluate(async () => Object.fromEntries(Object.entries(await chrome.storage.session.get(null)).filter(([key]) => key.startsWith('binding:'))));
+  // Capture the same snapshot that satisfied the wait; a second asynchronous read
+  // can race a late navigation notification and capture an empty fixture binding.
+  const bindingSnapshot = await popup.waitForFunction(() => chrome.storage.session.get(null).then(values => {
+    const found = Object.fromEntries(Object.entries(values).filter(([key]) => key.startsWith('binding:')));
+    return Object.keys(found).length ? found : false;
+  }));
+  const fixtureBindings = await bindingSnapshot.jsonValue();
   const pageCdp = await context.newCDPSession(page), worlds = [];
   pageCdp.on('Runtime.executionContextCreated', event => worlds.push(event.context)); await pageCdp.send('Runtime.enable');
   const isolated = worlds.find(world => world.name.includes(extensionId) || world.origin === 'chrome-extension://' + extensionId);
   assert.ok(isolated, 'real content script isolated world');
   const content = async message => {
     const response = await pageCdp.send('Runtime.evaluate', { contextId: isolated.id, expression: 'chrome.runtime.sendMessage(' + JSON.stringify(message) + ')', awaitPromise: true, returnByValue: true });
-    assert.ok(!response.exceptionDetails, 'content bridge completed'); return response.result.value;
+    assert.ok(!response.exceptionDetails, 'content bridge completed');
+    if (response.result.value?.error === 'article_unresolved') console.log('Synthetic fixture binding diagnostics', JSON.stringify({
+      captured: fixtureBindings, current: await popup.evaluate(async () => Object.fromEntries(Object.entries(await chrome.storage.session.get(null)).filter(([key]) => key.startsWith('binding:')))),
+      event: { article_id: message.event?.article_id, wiki: message.event?.wiki, page_id: message.event?.page_id, device_id: message.event?.device_id }
+    }));
+    return response.result.value;
   };
   const send = message => popup.evaluate(message => chrome.runtime.sendMessage(message), message);
   const local = keys => popup.evaluate(keys => chrome.storage.local.get(keys), keys);
@@ -116,9 +126,10 @@ try {
   }
   async function assertPopup(code, paused) {
     await popup.reload();
-    await popup.waitForFunction(expected => document.getElementById('status').textContent.includes(expected), paused ? '記録一時停止' : '記録中');
+    await popup.waitForFunction(expected => document.getElementById('status').textContent.includes(expected), paused ? '設定ON（条件待ち）' : '新しい記録: 設定ON ·');
     assert.ok((Array.isArray(code) ? code : [code]).includes((await send({ type: 'status' })).sync));
     assert.equal(await popup.locator('#recording').isChecked(), true);
+    assert.equal((await send({ type: 'status' })).recording_enabled, !paused);
   }
 
   // Seed a valid near-limit durable queue, then fail the actual trusted observation append.
@@ -137,6 +148,7 @@ try {
   assert.equal((await content({ type: 'lease' })).enabled, false);
   results.push({ check: 'queue_full-real-append-refused-and-retained', rows: full.rows.length, passed: true });
   if (!process.argv.includes('--baseline')) await assertPopup('queue_full', true);
+  await popup.locator('#dataOperations').evaluate(element => element.open = true);
   popup.once('dialog', dialog => dialog.accept()); await popup.locator('#discard').click();
   await popup.waitForFunction(() => chrome.storage.local.get('outbox').then(value => value.outbox.rows.length === 0));
   await assertResumed();

@@ -1,8 +1,22 @@
 <!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>wikimf</title><link rel="stylesheet" href="popup.css">
-<body><main><h1>wikimf</h1><p>Wikipedia の読書記録</p><p id="status" role="status">確認中…</p><p id="article"></p>
-<p id="counts"></p><p id="pairing"></p><button id="pair">アカウントと連携</button>
-<label><input id="recording" type="checkbox">この端末で記録する</label>
-<label><input id="sendQueued" type="checkbox" checked>停止中も保存済みの記録を同期する</label>
-<p class="note">画面表示と操作から読む時間と範囲を推定します。理解度を確認するものではありません。非公開が初期設定です。</p>
-<button id="sync">今すぐ同期</button><button id="discard">保存済みの未送信記録を破棄</button><button id="logout">同期して連携解除</button><button id="logoutDiscard">未送信を破棄して連携解除</button>
-<a id="dashboard" target="_blank" rel="noopener">Dashboard を開く</a><p id="error" role="alert"></p></main><script type="module" src="popup.js"></script></body></html>
+<body><main><header><h1>wikimf</h1><p id="identity" class="note" hidden></p></header>
+<p id="status" role="status">確認中…</p><p id="error" role="alert"></p>
+<p id="article" hidden></p><a id="articleDetail" class="compact-link" target="_blank" rel="noopener" hidden>この記事の詳細・状態変更 ↗</a>
+<p id="counts" hidden></p><p id="expiryNotice" class="note expiry-warning" role="status" hidden></p><p id="pairing"></p><button id="pair">アカウントと連携</button>
+<section id="linkedControls" hidden>
+<label><input id="recording" type="checkbox">この端末の新しい記録</label>
+<label><input id="sendQueued" type="checkbox" checked>保存済みを自動で送信（記録停止中も）</label>
+<button id="sync" title="自動送信OFFでも、この操作時の未送信をまとめて送ります">今すぐ同期</button>
+<details id="dataOperations"><summary>破棄・連携解除</summary>
+<button id="discard" class="danger">保存済みの未送信を破棄</button>
+<button id="logout">同期して連携解除</button><button id="logoutDiscard" class="danger">未送信を破棄して連携解除</button>
+</details></section>
+<a id="dashboard" target="_blank" rel="noopener">Dashboard を開く ↗</a>
+<details id="help"><summary>計測・保存・送信の仕様</summary>
+<p id="expiryDetails" class="note" hidden></p>
+<p class="note">新しい記録と保存済みの送信は別の設定です。対象は前面の日英Wikipediaの記事。画面表示と操作から時間・範囲を推定し、理解度を測るものではありません。</p>
+<p class="note">本文・検索入力・Cookieを計測イベントに含めません。非公開はクラウドでの公開範囲を示します。端末保存は暗号化されず、認証情報と読書イベントは別に保存します。</p>
+<p class="note">未送信は計測イベントの件数で、記事数とは異なります。容量は8MiB、送信に使える期限は最大7日。上限で新しい計測を止め、期限超過の行は次の有効な制御確認で除去されます。認証待ちの間に必ず7日で消去される、という意味ではありません。隔離は本文を除去した直近100件の診断、除去はこのブラウザーでの累計（期限・制御・手動破棄など）です。</p>
+<p class="note">明示同期は操作時のキューを120秒までまとめて処理します。残件は保持して再試行できます。連携解除は端末内の連携を外します。サーバー側の失効はDashboardで別に管理します。</p>
+<p class="note">認証待ちの未送信は保持します。元の認証が再び有効になれば「今すぐ同期」で再送できます。送信できても新しい計測の再開は別に確認してください。失効・期限切れの端末の旧キューを更新・移行する復旧機能は現在ありません。別の利用者・端末へ付け替えず、Dashboardで元の端末状態を確認してください。救済可否が分かる前に破棄しないでください。</p>
+</details></main><script type="module" src="popup.js"></script></body></html>

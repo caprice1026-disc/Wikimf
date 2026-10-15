@@ -4,6 +4,8 @@ Wikipedia の読書記録を、自分の非公開履歴・統計へまとめる�
 
 読書状態は「閲覧」「途中まで読んだ」「読了」。表示された本文とアクティブ時間から推定するため、理解度の証明ではありません。手動設定では時間・推定文字数を増やしません。
 
+LAN検証用の [0.1.5 prerelease](https://github.com/caprice1026-disc/Wikimf/releases/tag/v0.1.5-lan.1) は、Androidの破棄確認/同意案内、Chromeの同期/期限注意、Dashboardの単位と一覧復帰を改善します。[導入・更新・検証範囲](docs/releases/ui-feedback-0.1.5.md)を確認し、既存の履歴・未送信・署名・拡張IDを保持して更新してください。ソース公開と稼働LANサービス/DBの配備は別で、このRelease作業では実サービスを更新しません。
+
 M0〜M10の機能を実装し、PostgreSQL・実Chrome・Android15エミュレータで閉じた検証を完了しました。一般公開前に必要な実OAuth、HTTPS配備、物理実機、正式配布用の鍵・署名と継続利用の確認は [ST計画](docs/releases/ST-plan.md) と [Issue #13](https://github.com/caprice1026-disc/Wikimf/issues/13) に残しています。
 
 Androidは「エミュレーターで機能確認 → ST専用鍵で署名したrelease APK → 自分の実機1台へインストール → 実Wikipedia/Backendで縦断確認 → 実機固有の挙動 → 3〜7日の普段使い」の順で進めます。実機では画面OFF/復帰、回線切替と未送信の再同期、外部ブラウザ連携、Keystore、日本語IMEを重点的に確認します。HTTPS接続先は未準備のため、用意後にAccountで設定します。[ST署名・実機への移行手順](docs/releases/android-device-ST.md) にビルドと確認項目をまとめています。

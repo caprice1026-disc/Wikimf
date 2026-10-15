@@ -12,8 +12,9 @@ const runtime = process.env.WIKIMF_NODE_MODULES || resolve(homedir(),'.cache/cod
 const { chromium } = require(resolve(runtime,'playwright'));
 const account = { user_id: crypto.randomUUID(), device_id: crypto.randomUUID(), token: 'fixture-device-token', recording_epoch: 1, display_name: 'Fixture account' };
 const article = { article_id: crypto.randomUUID(), wiki:'jawiki',page_id:1,namespace:0,trackable:true,title:'Fixture',canonical_url:'https://ja.wikipedia.org/wiki/Fixture' };
-let offline = false; const received = [];
+let offline = false; const received = [], networkRequests = [];
 const server = http.createServer(async(req,res)=>{
+  networkRequests.push(req.url);
   if(offline) { res.writeHead(503);res.end('{}');return; }
   let body='';for await(const part of req) body+=part;
   res.setHeader('Content-Type','application/json');
@@ -80,7 +81,9 @@ try {
   results.push({check:'content-storage-credential-access-denied',passed:true});
   await popup.bringToFront();await popup.reload();
   await popup.waitForFunction(()=>document.getElementById('status').textContent.includes('記録'));
-  assert.ok((await popup.locator('#status').innerText()).includes('記録中'));
+  assert.match(await popup.locator('#status').innerText(), /新しい記録: 設定ON/);
+  assert.doesNotMatch(await popup.locator('#status').innerText(), /記録中|計測中/);
+  assert.equal(await popup.locator('#recording').isChecked(), true);
   const html=await popup.content();assert.ok(!html.includes(account.token));
   await popup.screenshot({path:fileURLToPath(new URL('../.browser-tests/popup.png',import.meta.url))});
   results.push({check:'popup-sync-consent-no-token',passed:true});
@@ -112,6 +115,41 @@ try {
   await popup.waitForTimeout(1000);
   stored=await popup.evaluate(()=>chrome.storage.local.get('outbox'));
   assert.equal(stored.outbox.rows.length,0);results.push({check:'restart-resend-ACK-only-deletion',passed:true});
+  // A same-identity extension reload must preserve retained rows and preferences.
+  await popup.evaluate(()=>chrome.runtime.sendMessage({type:'recording',enabled:false,sendQueued:false}));
+  await popup.waitForTimeout(200);await popup.evaluate(()=>chrome.runtime.sendMessage({type:'sync',drain:true}));
+  await popup.waitForFunction(()=>chrome.storage.local.get('outbox').then(value=>value.outbox.rows.length===0));
+  const reloadEvent={...received[0],event_id:crypto.randomUUID()};
+  await popup.evaluate(({event,owner})=>chrome.storage.local.set({outbox:{rows:[{owner,created_at:Date.now(),event}],quarantine:[],lossCount:0}}),{event:reloadEvent,owner:{user_id:account.user_id,device_id:account.device_id}});
+  const retained=await popup.evaluate(()=>chrome.storage.local.get(['outbox','settings']));
+  await popup.evaluate(()=>chrome.runtime.reload()).catch(error=>{if(!/context.*destroyed|Target.*closed/i.test(error.message))throw error;});
+  const reloaded=await context.newPage();await reloaded.goto('chrome-extension://'+loaded.id+'/popup.html');
+  await reloaded.waitForFunction(()=>document.getElementById('recording').disabled===false);
+  assert.deepEqual(await reloaded.evaluate(()=>chrome.storage.local.get(['outbox','settings'])),retained);
+  assert.ok((await cdp.send('Extensions.getExtensions')).extensions.some(item=>item.id===loaded.id&&item.enabled));
+  results.push({check:'same-extension-identity-reload-keeps-pending-and-settings',passed:true});
+  // Exercise the real worker's expiry aggregate without an API control or delivery.
+  const at=Date.now()-7*86400000+2.5*3600000,expired=Date.now()-7*86400000-60000;
+  const expiryEvent=stamp=>({...reloadEvent,event_id:crypto.randomUUID(),occurred_at:new Date(stamp).toISOString(),session_started_at:new Date(stamp).toISOString(),
+    interval:{...reloadEvent.interval,start_at:new Date(stamp).toISOString(),end_at:new Date(stamp).toISOString(),active_spans_ms:[]}});
+  const foreign={user_id:crypto.randomUUID(),device_id:crypto.randomUUID()};
+  const expiryRows=[{owner:{user_id:account.user_id,device_id:account.device_id},created_at:at,event:expiryEvent(at)},
+    {owner:{user_id:account.user_id,device_id:account.device_id},created_at:expired,event:expiryEvent(expired)},
+    {owner:{user_id:account.user_id,device_id:account.device_id},created_at:null,event:expiryEvent(at)},
+    {owner:foreign,created_at:at,event:{...expiryEvent(at),device_id:foreign.device_id}}];
+  await reloaded.evaluate(rows=>chrome.storage.local.set({outbox:{rows,quarantine:[],lossCount:0}}),expiryRows);
+  const expiryBefore=await reloaded.evaluate(()=>chrome.storage.local.get(['outbox','credentials','settings']));
+  const dangerousRequests=()=>networkRequests.filter(url=>/recording-control|reading-events|device-links/.test(url));
+  const requestsBefore=structuredClone(dangerousRequests());
+  await reloaded.reload();await reloaded.waitForFunction(()=>!document.getElementById('expiryNotice').hidden);
+  assert.match(await reloaded.locator('#expiryNotice').innerText(),/未送信1件.*約2時間/);
+  await reloaded.locator('#help>summary').click();
+  assert.match(await reloaded.locator('#expiryDetails').innerText(),/過ぎた記録: 1件/);
+  assert.match(await reloaded.locator('#expiryDetails').innerText(),/確認できない記録: 1件/);
+  assert.deepEqual(await reloaded.evaluate(()=>chrome.storage.local.get(['outbox','credentials','settings'])),expiryBefore);
+  assert.deepEqual(dangerousRequests(),requestsBefore);
+  await reloaded.screenshot({path:fileURLToPath(new URL('../.browser-tests/expiry-popup-mv3.png',import.meta.url)),fullPage:true});
+  results.push({check:'real-worker-expiry-popup-is-owner-bound-and-read-only',passed:true});
   console.log(JSON.stringify({fixture_api:true,results},null,2));
   await writeFile(new URL('../.browser-tests/report.json',import.meta.url),JSON.stringify({fixture_api:true,results},null,2));
 } finally {await context?.close();await new Promise(done=>server.close(done));}

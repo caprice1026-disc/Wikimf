@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from 'react-router-dom';
 import { apiUrl, ApiError, mutate, safeLoginReturn, setCsrfToken } from './api';
 import { Achievements, DailyBars, EmptyState, ErrorNotice, MutationNotice, PageHeader, Resource, StatRail } from './components';
 import { useMutation, useResource } from './hooks';
@@ -75,11 +75,39 @@ function AppShell() {
   const { user, privacy } = useAuth();
   const [theme, setTheme] = useState(() => localStorage.getItem('wikimf-theme') || 'light');
   const location = useLocation();
+  const navigationType = useNavigationType();
+  const scrollPositions = useRef(new Map<string, number>());
   useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('wikimf-theme', theme); }, [theme]);
   useEffect(() => {
-    window.scrollTo({ top: 0 });
     document.querySelector<HTMLElement>('#main-content')?.focus({ preventScroll: true });
   }, [location.pathname]);
+  useLayoutEffect(() => {
+    const key = location.pathname + location.search;
+    const top = navigationType === 'POP' || location.state?.restoreScroll === true ? scrollPositions.current.get(key) || 0 : 0;
+    let restoring = top > 0;
+    const observer = new ResizeObserver(() => restore());
+    function restore() {
+      window.scrollTo({ top });
+      if (document.documentElement.scrollHeight - innerHeight >= top) { restoring = false; observer.disconnect(); }
+    }
+    const save = () => {
+      if (!restoring && window.location.pathname + window.location.search === key) scrollPositions.current.set(key, window.scrollY);
+    };
+    const cancel = () => { restoring = false; observer.disconnect(); };
+    window.addEventListener('scroll', save, { passive: true });
+    // Capture the last position before a Link changes the DOM; scroll events
+    // can still be pending when the user immediately opens an article.
+    document.addEventListener('click', save, true);
+    window.addEventListener('wheel', cancel, { passive: true });
+    window.addEventListener('touchstart', cancel, { passive: true });
+    if (restoring) observer.observe(document.querySelector('#main-content')!);
+    restore();
+    return () => {
+      observer.disconnect(); window.removeEventListener('scroll', save);
+      document.removeEventListener('click', save, true);
+      window.removeEventListener('wheel', cancel); window.removeEventListener('touchstart', cancel);
+    };
+  }, [location.key]);
   const mobileNavigation: [string, string, IconName][] = [...navigation.slice(0, 3), ['/app/settings', 'More', 'shield']];
   return <div className="app-shell">
     <a href="#main-content" className="skip-link">本文へ移動</a>

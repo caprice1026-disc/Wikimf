@@ -175,7 +175,8 @@ try {
   assert.equal(records.length, 2);
   await page.getByRole('button', { name: 'この記事を履歴から削除' }).click();
   await page.getByRole('dialog').getByRole('button', { name: '削除する', exact: true }).click();
-  await page.waitForURL(/\/app\/library$/);
+  // The article was opened from Overview, so deletion returns to that context.
+  await page.waitForURL(/\/app$/);
   await page.reload();
   await page.getByRole('link', { name: article2.title }).waitFor();
   assert.equal(await page.getByRole('link', { name: article.title }).count(), 0);

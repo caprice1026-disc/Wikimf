@@ -193,7 +193,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun AccountScreen(
+@Composable internal fun AccountScreen(
     context: android.content.Context, settings: Settings, store: LocalStore, device: LinkedDevice?, scope: CoroutineScope,
     openBrowser: (String) -> Unit, changed: () -> Unit, logout: () -> Unit
 ) {
@@ -205,10 +205,12 @@ class MainActivity : ComponentActivity() {
     var pairingStatus by remember { mutableStateOf<String?>(null) }
     var stats by remember(device?.userId) { mutableStateOf<JSONObject?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var pendingDiscard by remember(device?.deviceId) { mutableStateOf<PendingDiscardConfirmation?>(null) }
     val syncRevision by SyncUiUpdates.changes.collectAsState()
-    val syncMessage = remember(syncRevision, device?.userId) { syncStatusMessage(settings.status) }
     val queued = remember(syncRevision, device?.userId) { device?.let { store.count(it.userId) } ?: 0 }
     val quarantined = remember(syncRevision, device?.userId) { device?.let { store.quarantined(it.userId) } ?: 0 }
+    val syncMessage = syncStatusMessage(settings.status, queued, quarantined, cloudConsent, settings.serverEnabled)
+    val syncNote = previousSyncNote(settings.status, queued)
     LaunchedEffect(device?.deviceId) {
         if (device != null) {
             stats = runCatching { Api(settings).request("/me/stats") }.getOrNull()
@@ -251,8 +253,14 @@ class MainActivity : ComponentActivity() {
                 item { Row { Text("この端末で記録を一時停止", Modifier.weight(1f)); Switch(checked = paused, onCheckedChange = { paused = it; settings.paused = it; changed() }) } }
                 item { Text("同期状態: $syncMessage") }
                 item { Text("未送信 ${queued}件・隔離 ${quarantined}件") }
+                syncNote?.let { note -> item { Text(note, style = MaterialTheme.typography.bodySmall) } }
                 item { TextButton(onClick = { SyncEngine.schedule(context); changed() }) { Text("同期を再試行") } }
-                if (!cloudConsent || !settings.serverEnabled) item { TextButton(onClick = { store.discard(device.userId); changed() }) { Text("この端末の未送信記録を破棄") } }
+                if (!cloudConsent || !settings.serverEnabled) item {
+                    if (queued + quarantined == 0) Text("破棄する未送信記録・隔離診断はありません", style = MaterialTheme.typography.bodySmall)
+                    else TextButton(onClick = {
+                        pendingDiscard = PendingDiscardConfirmation(device.deviceId, store.pendingDiscardSnapshot(device.userId))
+                    }) { Text("この端末の未送信記録を破棄") }
+                }
                 item { TextButton(onClick = logout) { Text("ログアウト / 端末連携解除") } }
             }
             pairingStatus?.let { item { Text(it) } }
@@ -260,6 +268,15 @@ class MainActivity : ComponentActivity() {
             item { Button(enabled = settings.dashboardOrigin != null, onClick = { settings.dashboardOrigin?.let { openBrowser(DashboardUrls.overview(it)) } }) { Text("Dashboardを開く") } }
             item { TextButton(enabled = settings.dashboardOrigin != null, onClick = { settings.dashboardOrigin?.let { openBrowser(DashboardUrls.privacy(it)) } }) { Text("全端末の記録停止・削除・export・公開設定") } }
         }
+    }
+    pendingDiscard?.let { confirmation ->
+        PendingDiscardDialog(confirmation, device?.displayName.orEmpty(), onConfirm = {
+            if (pendingDiscard === confirmation) {
+                pendingDiscard = null
+                if (!confirmPendingDiscard(settings, store, confirmation)) pairingStatus = "未送信や連携・同意の状態が変わりました。件数と設定を確認して、もう一度操作してください。"
+                changed()
+            }
+        }, onCancel = { pendingDiscard = null })
     }
 }
 
@@ -433,7 +450,7 @@ internal class ReaderController(
         if (!enabled && hostActive) { hostActive = false; webView?.evaluateJavascript("window.WKMF_NATIVE?.setActive(false)", null) }
         else if (enabled && contextStarted && !hostActive) { hostActive = true; webView?.requestFocus(); webView?.evaluateJavascript("window.WKMF_NATIVE?.setActive(true)", null) }
         else if (enabled && pageReady && domEligible && resolveJob?.isActive != true && article?.optBoolean("trackable") != false) start(domPageId)
-        if (bridgeEnabled && !enabled) status = if (settings.paused) "記録一時停止中" else if (!settings.cloudConsent || settings.device() == null) "クラウド記録はAccountで連携・同意後に開始します" else if (!settings.serverEnabled) "クラウド収集はDashboardで有効にしてください" else ""
+        if (bridgeEnabled && !enabled) status = recordingStatusMessage(settings.device() != null, settings.cloudConsent, settings.serverEnabled, settings.paused)
     }
     private fun start(fallbackPageId: Long = domPageId) {
         if (contextStarted || !pageReady || !bridgeEnabled || !active() || !settings.cloudConsent || !settings.serverEnabled || settings.paused || !UrlPolicy.measurable(url)) return

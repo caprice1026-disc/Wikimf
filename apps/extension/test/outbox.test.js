@@ -5,6 +5,14 @@ import { ReadingSession } from '../../../packages/tracker/tracker.js';
 const user={user_id:crypto.randomUUID(),device_id:crypto.randomUUID()};
 function memory(){const data={};return {get:async key=>structuredClone({[key]:data[key]}),set:async value=>Object.assign(data,structuredClone(value))};}
 function event(){const now=Date.now();return new ReadingSession({article:{article_id:crypto.randomUUID(),wiki:'jawiki',page_id:1},deviceId:user.device_id,source:'chrome_extension',epoch:1,now,mono:0,document:{fingerprint:'a'.repeat(64),extractor_version:'prose-v1',observed_revision_id:null,text_chars:200,chunk_chars:[200]}}).event('session.opened');}
+test('confirmed discard rejects same-count replacement and binding change and preserves foreign rows',async()=>{
+  const queue=new Outbox(memory()),first=event(),second=event();await queue.enqueue(user,first);
+  await queue.applyAck(user,{results:[{event_id:first.event_id,status:'accepted'}]},new Set([first.event_id]));await queue.enqueue(user,second);
+  assert.equal(await queue.discard(user,[first.event_id]),false);assert.deepEqual((await queue.batch(user)).map(e=>e.event_id),[second.event_id]);
+  assert.equal(await queue.discard(user,[second.event_id],()=>false),false);
+  const other={user_id:crypto.randomUUID(),device_id:crypto.randomUUID()},foreign=event();foreign.device_id=other.device_id;await queue.enqueue(other,foreign);
+  assert.equal(await queue.discard(user,[second.event_id]),true);assert.equal((await queue.batch(user)).length,0);assert.deepEqual((await queue.batch(other)).map(e=>e.event_id),[foreign.event_id]);
+});
 test('durable queue is serialized and stays bound to original account/device across restarts',async()=>{
   const storage=memory(),queue=new Outbox(storage),events=[event(),event(),event()];
   await Promise.all(events.map(item=>queue.enqueue(user,item)));

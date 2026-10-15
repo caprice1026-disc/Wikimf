@@ -17,9 +17,31 @@ class RetainedStateRegressionTest {
     @Test fun encryptedCredentialsHistoryAndOutboxSurviveInPlaceUpdate() = runBlocking {
         val args=InstrumentationRegistry.getArguments()
         val stage=args.getString("retention_stage")
-        assumeTrue(stage in setOf("seed","verify","sync","cleanup_fixture"))
+        assumeTrue(stage in setOf("seed","verify","sync","cleanup_fixture","snapshot"))
         val context=InstrumentationRegistry.getInstrumentation().targetContext
         val settings=Settings(context)
+        if(stage=="snapshot") {
+            assertTrue("Snapshot only the dedicated QA app",context.packageName=="org.wikimf.reader.lan.local")
+            assertTrue("Snapshot only the isolated QA API",settings.apiUrl=="http://10.0.2.2:18080/api/v1")
+            assertFalse("Keep cloud consent OFF across the APK update",settings.cloudConsent)
+            fun preferences(name:String)=digest(JSONObject(context.getSharedPreferences(name,android.content.Context.MODE_PRIVATE).all.toSortedMap()).toString())
+            val snapshot=JSONObject().put("preferences_sha256",preferences("preferences"))
+                .put("encrypted_credentials_sha256",preferences("encrypted_credentials"))
+                .put("cloud_consent",settings.cloudConsent).put("local_consent",settings.localConsent)
+            LocalStore(context).use { store ->
+                for(table in listOf("history","outbox","diagnostics")) {
+                    val content=JSONArray()
+                    store.readableDatabase.rawQuery("SELECT * FROM $table ORDER BY "+if(table=="history")"owner,kind,identity" else "id",null).use { cursor ->
+                        content.put(JSONArray(cursor.columnNames.toList()))
+                        while(cursor.moveToNext())content.put(JSONArray((0 until cursor.columnCount).map { if(cursor.isNull(it))JSONObject.NULL else cursor.getString(it) }))
+                        snapshot.put(table+"_rows",cursor.count)
+                    }
+                    snapshot.put(table+"_sha256",digest(content.toString()))
+                }
+            }
+            InstrumentationRegistry.getInstrumentation().sendStatus(0,Bundle().apply { putString("retention_snapshot",snapshot.toString()) })
+            return@runBlocking
+        }
         val device=settings.device() ?: error("Link the dedicated emulator before this check")
         assertEquals(device.userId,Api(settings).request("/me").getString("user_id"))
         LocalStore(context).use { store ->
@@ -57,6 +79,7 @@ class RetainedStateRegressionTest {
                 assertTrue("Local opt-in persists",settings.localConsent);assertFalse("Cloud opt-in stays OFF",settings.cloudConsent)
                 assertTrue(store.history(device.userId,"recent","enwiki").any { it.title=="APK update retention fixture" })
                 if(stage=="sync") {
+                    assertEquals("Do not synchronize unrelated retained data",listOf(row.id),store.rows(device).map { it.id })
                     // A real LAN API ACK, then an identical replay, establishes delivery and deduplication.
                     // Restrict this opt-in test to the dedicated emulator's loopback QA stack.
                     assertEquals("http://10.0.2.2:18080/api/v1",settings.apiUrl)

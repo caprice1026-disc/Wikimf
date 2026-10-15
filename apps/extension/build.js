@@ -17,8 +17,8 @@ const files = ['worker.js','outbox.js','sync-state.js','popup.html','popup.js','
 for (const file of files) await copyFile(new URL('./src/' + file, import.meta.url), new URL(file, root));
 await copyFile(new URL('../../packages/tracker/dist/wiki-tracker.js', import.meta.url), new URL('wiki-tracker.js', root));
 await copyFile(new URL('../../packages/tracker/tracker.js', import.meta.url), new URL('tracker-module.js', root));
-await writeFile(new URL('config.js', root), `export const API_ORIGIN=${JSON.stringify(origin.origin)};\nexport const DASHBOARD_ORIGIN=${JSON.stringify(dashboard.origin)};\nexport const CLIENT_VERSION='${lan ? '0.1.2-lan' : '0.1.2'}';\n`);
-await writeFile(new URL('manifest.json', root), JSON.stringify({ manifest_version: 3, minimum_chrome_version: '114', name: lan ? 'wikimf LAN 検証' : 'wikimf', version: '0.1.2',
+await writeFile(new URL('config.js', root), `export const API_ORIGIN=${JSON.stringify(origin.origin)};\nexport const DASHBOARD_ORIGIN=${JSON.stringify(dashboard.origin)};\nexport const CLIENT_VERSION='${lan ? '0.1.5-lan' : '0.1.5'}';\n`);
+await writeFile(new URL('manifest.json', root), JSON.stringify({ manifest_version: 3, minimum_chrome_version: '114', name: lan ? 'wikimf LAN 検証' : 'wikimf', version: '0.1.5',
   description: '非公開で始める Wikipedia の読書記録。日本語・英語に対応。', incognito: 'not_allowed', permissions: ['storage','alarms'],
   host_permissions: ['https://ja.wikipedia.org/*','https://en.wikipedia.org/*',origin.origin + '/*'],
   background: { service_worker: 'worker.js', type: 'module' }, action: { default_popup: 'popup.html', default_title: 'wikimf' },

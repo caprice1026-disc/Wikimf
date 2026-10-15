@@ -8,6 +8,34 @@ import { Outbox } from '../src/outbox.js';
 import { ReadingSession } from '../../../packages/tracker/tracker.js';
 
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
+test('status expiry reads only its own rows without control, batch or credential changes',async t=>{
+  const h=await worker(t,{recording:false,sendQueued:false}),at=Date.now()-6*86400000;
+  const event={...opened(h),occurred_at:new Date(at).toISOString(),session_started_at:new Date(at).toISOString()};
+  h.data.outbox={rows:[{owner:h.auth,created_at:at,event},
+    {owner:{...h.auth,device_id:crypto.randomUUID()},created_at:at-86400000,event}],quarantine:[],lossCount:0};
+  h.data.syncStatus={code:'reauth_required'};h.data.control.recording_epoch=0;
+  const before=structuredClone(h.data);h.requests.length=0;
+  const status=await h.message({type:'status'});
+  assert.equal(status.expiry.near_count,1);assert.equal(status.expiry.expired_count,0);
+  assert.equal(status.sync,'reauth_required');assert.equal(status.recording_enabled,false);
+  assert.ok(status.expiry.remaining_ms<=86400000&&status.expiry.remaining_ms>86300000);
+  assert.deepEqual(h.data,before);assert.deepEqual(h.requests,[]);
+});
+test('observed forward and backward wall-clock jumps suppress status countdowns',async t=>{
+  const h=await worker(t,{recording:false,sendQueued:false}),at=Date.now()-6*86400000;
+  h.data.outbox={rows:[{owner:h.auth,created_at:at,event:{...opened(h),occurred_at:new Date(at).toISOString(),session_started_at:new Date(at).toISOString()}}],quarantine:[],lossCount:0};
+  const before=structuredClone(h.data),realNow=Date.now;
+  try{
+    for(const offset of [3600000,-3600000]){
+      Date.now=()=>realNow()+offset;
+      const status=await h.message({type:'status'});
+      assert.equal(status.expiry.clock_anomaly,true);assert.equal(status.expiry.remaining_ms,null);
+      assert.equal(status.expiry.unknown_count,1);assert.equal(status.expiry.expired_count,0);
+    }
+  }finally{Date.now=realNow;}
+  assert.equal((await h.message({type:'status'})).expiry.near_count,1);
+  assert.deepEqual(h.data,before);assert.deepEqual(h.requests,[]);
+});
 const settle = async () => { for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve)); };
 
 async function worker(t, { recording = true, sendQueued = false, enabled = true } = {}) {
@@ -76,6 +104,78 @@ function opened(harness, now = Date.now()) {
     document: { fingerprint: 'a'.repeat(64), extractor_version: 'prose-v1', observed_revision_id: null, text_chars: 200, chunk_chars: [200] } }).event('session.opened');
 }
 
+test('manual bulk sync drains its initial queue across batches and preserves preferences and foreign rows',async t=>{
+  const h=await worker(t,{recording:false,sendQueued:false});
+  const own=Array.from({length:251},()=>({owner:h.auth,created_at:Date.now(),event:opened(h)}));
+  const other={user_id:crypto.randomUUID(),device_id:crypto.randomUUID()};
+  const foreign={owner:other,created_at:Date.now(),event:{...opened(h),device_id:other.device_id}};
+  h.data.outbox={rows:[...own,foreign],quarantine:[],lossCount:0};
+  const result=await h.message({type:'sync',drain:true});
+  assert.equal(result.queued,0);assert.equal(result.linked,true);
+  assert.deepEqual(h.requests.filter(r=>r.path.endsWith('/reading-events/batch')).map(r=>JSON.parse(r.options.body).events.length),[100,100,51]);
+  assert.deepEqual((await h.queue.read()).rows,[foreign]);assert.deepEqual(h.data.settings,{recording:false,sendQueued:false});
+});
+test('manual bulk sync retains its suffix after partial ACK then network failure',async t=>{
+  const h=await worker(t,{recording:false,sendQueued:false});
+  const rows=Array.from({length:220},()=>({owner:h.auth,created_at:Date.now(),event:opened(h)}));
+  h.data.outbox={rows,quarantine:[],lossCount:0};let calls=0;
+  h.batchReply(events=>++calls===1?Response.json({results:events.slice(0,40).map(e=>({event_id:e.event_id,status:'accepted'})),recording_epoch:1}):Response.json({}, {status:503}));
+  const result=await h.message({type:'sync',drain:true});
+  assert.equal(calls,2);assert.equal(result.queued,180);assert.deepEqual((await h.queue.read()).rows,rows.slice(40));
+  assert.equal(result.sync,'offline');assert.deepEqual(h.data.credentials,h.auth);
+});
+test('manual bulk sync stops on missing ACK and latest collection OFF without removing pending rows',async t=>{
+  const h=await worker(t,{recording:false,sendQueued:false});const rows=Array.from({length:120},()=>({owner:h.auth,created_at:Date.now(),event:opened(h)}));
+  h.data.outbox={rows,quarantine:[],lossCount:0};h.batchReply(()=>Response.json({results:[],recording_epoch:1}));
+  assert.equal((await h.message({type:'sync',drain:true})).queued,120);
+  assert.equal(h.requests.filter(r=>r.path.endsWith('/reading-events/batch')).length,1);
+  h.requests.length=0;h.remote.collection_enabled=false;
+  assert.equal((await h.message({type:'sync',drain:true})).queued,120);
+  assert.equal(h.requests.some(r=>r.path.endsWith('/reading-events/batch')),false);assert.deepEqual((await h.queue.read()).rows,rows);
+});
+test('discard preview has no payload and a changed queue requires new confirmation',async t=>{
+  const h=await worker(t,{recording:false,sendQueued:false});await h.queue.enqueue(h.auth,opened(h));
+  const before=await h.message({type:'discard.preview'});assert.equal(before.queued,1);assert.equal(before.event_ids.length,1);assert.equal('token' in before,false);
+  await h.queue.enqueue(h.auth,opened(h));const unchanged=await h.queue.read();
+  assert.equal((await h.message({type:'discard',expected_device_id:before.device_id,expected_event_ids:before.event_ids})).error,'queue_changed');
+  assert.deepEqual(await h.queue.read(),unchanged);
+  const latest=await h.message({type:'discard.preview'});
+  assert.equal((await h.message({type:'discard',expected_device_id:latest.device_id,expected_event_ids:latest.event_ids})).queued,0);
+});
+test('authentication failure keeps pending rows and does not allow another identity to inherit them',async t=>{
+  const h=await worker(t,{recording:false,sendQueued:false});await h.queue.enqueue(h.auth,opened(h));const before=await h.queue.read();h.controlStatus(401);
+  assert.equal((await h.message({type:'sync',drain:true})).sync,'reauth_required');assert.deepEqual(await h.queue.read(),before);
+  assert.equal((await h.message({type:'pair.start'})).error,'already_linked');
+  assert.equal((await h.message({type:'logout',discard:false})).error,'unsent_records');assert.deepEqual(await h.queue.read(),before);
+});
+test('valid original credentials can deliver retained rows after a 401 without transferring or clearing the link',async t=>{
+  const h=await worker(t,{recording:true,sendQueued:false});await h.queue.enqueue(h.auth,opened(h));
+  const foreign={owner:{user_id:crypto.randomUUID(),device_id:crypto.randomUUID()},created_at:Date.now(),event:opened(h)};
+  foreign.event.device_id=foreign.owner.device_id;
+  h.data.outbox.rows.push(foreign);const before=await h.queue.read();
+  h.controlStatus(401);assert.equal((await h.message({type:'sync',drain:true})).sync,'reauth_required');
+  assert.deepEqual(await h.queue.read(),before);assert.equal(h.requests.some(r=>r.path.endsWith('/reading-events/batch')),false);
+  h.controlStatus(200);const result=await h.message({type:'sync',drain:true});
+  assert.equal(result.queued,0);assert.deepEqual((await h.queue.read()).rows,[foreign]);assert.deepEqual(h.data.credentials,h.auth);
+  assert.deepEqual(h.data.settings,{recording:true,sendQueued:false});
+  // Delivery recovery is not permission to silently restart new measurement.
+  assert.equal(result.sync,'reauth_required');assert.equal(result.recording_enabled,false);
+});
+test('continued 403 cannot non-destructively unlink or start a new device over retained records',async t=>{
+  const h=await worker(t,{recording:false,sendQueued:false});await h.queue.enqueue(h.auth,opened(h));const before=await h.queue.read();
+  h.controlStatus(403);assert.equal((await h.message({type:'sync',drain:true})).sync,'device_revoked');
+  assert.equal((await h.message({type:'logout',discard:false})).error,'unsent_records');
+  assert.equal((await h.message({type:'pair.start'})).error,'already_linked');
+  assert.deepEqual(await h.queue.read(),before);assert.deepEqual(h.data.credentials,h.auth);
+  assert.equal(h.requests.some(r=>r.path.endsWith('/reading-events/batch')),false);
+});
+test('a different owner in fresh control cannot recover or inherit the old pending records',async t=>{
+  const h=await worker(t,{recording:false,sendQueued:false});await h.queue.enqueue(h.auth,opened(h));const before=await h.queue.read();
+  h.remote.user_id=crypto.randomUUID();
+  assert.equal((await h.message({type:'sync',drain:true})).sync,'owner_mismatch');
+  assert.deepEqual(await h.queue.read(),before);assert.deepEqual(h.data.credentials,h.auth);
+  assert.equal(h.requests.some(r=>r.path.endsWith('/reading-events/batch')),false);
+});
 test('new page, reload and pageshow resolve disclose no URL while collection is OFF', async t => {
   const h = await worker(t, { enabled: false });
   for (let i = 0; i < 3; i++) assert.equal((await h.message({ type: 'article.resolve' }, h.content)).enabled, false);
